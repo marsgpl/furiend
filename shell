@@ -1,0 +1,28 @@
+#!/bin/sh
+
+NAME=furiend_shell
+RUNNING=$(docker container list --filter name=$NAME --quiet)
+STOPPED=$(docker container list --all --filter name=$NAME --quiet)
+
+if [ -n "$RUNNING" ]; then
+    echo "docker container is already running: $NAME"
+elif [ -n "$STOPPED" ]; then
+    docker container start \
+        --attach \
+        --interactive \
+        $NAME
+else # not created
+    docker container run \
+        --tty \
+        --interactive \
+        --name $NAME \
+        --entrypoint /bin/sh \
+        --env ENV=/root/.profile \
+        --network furiend \
+        --ip 172.20.0.2 \
+        --hostname shell \
+        --volume "$(pwd):/furiend/:rw" \
+        --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
+        --volume "$(pwd)/docker/.profile:/root/.profile:rw" \
+        furiend
+fi

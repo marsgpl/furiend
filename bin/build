@@ -1,0 +1,22 @@
+#!/bin/sh
+
+function error {
+    if [ -z "$1" ]; then
+        echo "$(tput setaf 1)Error$(tput sgr0)" >&2
+    else
+        echo "$(tput setaf 1)Error:$(tput sgr0) $1" >&2
+    fi
+    exit 1
+}
+
+cd /furiend/src/furiend || error
+echo "$(tput setaf 6)furiend lib$(tput sgr0)"
+make lib || error
+
+cd /furiend/src/lua-lib || error
+for dir in $(find . -type d -mindepth 1 -maxdepth 1); do
+    echo "$(tput setaf 6)$(basename $dir).so$(tput sgr0)"
+    cd "$dir" || error
+    make || error
+    cd .. || error
+done

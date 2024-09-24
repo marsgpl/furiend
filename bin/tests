@@ -1,0 +1,13 @@
+#!/furiend/bin/lua
+
+package.path = "/furiend/?.lua;/furiend/?.luac"
+package.cpath = "/furiend/src/lua-lib/?/?.so"
+
+local async = require "async"
+local loop = async.loop
+
+warn "@on"
+
+loop(function()
+    require "test.sleep" ()
+end)

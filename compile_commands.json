@@ -1,0 +1,7 @@
+[
+    {
+        "directory": "/Users/marsgpl/projects/furiend",
+        "command": "clang -I./src -I./vendor/lua-5.4.7/src -I./inc/mac",
+        "file": ""
+    }
+]
