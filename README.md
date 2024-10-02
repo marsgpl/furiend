@@ -35,8 +35,30 @@ cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
 ```
 
-## Diagnostics
+## LuaRocks
 
 ```sh
-nm src/lua-lib/async/async.so
+cd /furiend/vendor
+wget https://luarocks.org/releases/luarocks-3.11.1.tar.gz
+tar -xvf luarocks-3.11.1.tar.gz
+./configure --with-lua-include=/furiend/vendor/lua-5.4.7/src
+make install
 ```
+
+## TODO
+
+- url
+- http client
+- tls
+- redis client
+- log
+- simplify dns async boilerplate
+- dns client support more types
+- dns client ip6
+- fs (file, dir, stat)
+- socket
+- buffer (tcp stream packet separation)
+- custom epoll
+- string utils
+- sandbox
+- thread

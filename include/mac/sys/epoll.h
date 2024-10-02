@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define SOCK_NONBLOCK 0
+
 #define EPOLLIN 0
 #define EPOLLPRI 0
 #define EPOLLOUT 0

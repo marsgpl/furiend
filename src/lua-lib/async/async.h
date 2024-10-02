@@ -26,17 +26,11 @@ static inline void loop_notify_fd_sub(
     int fd_subs_idx,
     int t_subs_idx,
     int fd,
-    int emask);
-
-static void loop_notify_t_subs(
-    lua_State *L,
-    lua_State *T,
-    int t_subs_idx,
-    int status,
-    int nres);
+    int emask,
+    const char *errmsg);
 
 static int wait_ok(lua_State *L, lua_State *T);
-static int wait_yield(lua_State *L, int t_index);
+static int wait_yield(lua_State *L, int thread_idx);
 static int wait_error(lua_State *L, lua_State *T, int status);
 static int wait_continue(lua_State *L, int status, lua_KContext ctx);
 static int pwait_continue(lua_State *L, int status, lua_KContext ctx);

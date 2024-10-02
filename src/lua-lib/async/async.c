@@ -6,21 +6,19 @@ LUAMOD_API int luaopen_async(lua_State *L) {
 }
 
 int async_loop(lua_State *L) {
-    luaF_need_args(L, 1);
+    luaF_need_args(L, 1, "loop");
     luaL_checktype(L, 1, LUA_TFUNCTION);
 
-    if (lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP) != LUA_TNIL) {
+    int type = lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
+
+    if (type != LUA_TNIL) {
         luaL_error(L, "only 1 loop is allowed; current: %p; ridx: %d",
             lua_topointer(L, -1),
             F_RIDX_LOOP);
     }
     lua_pop(L, 1); // lua_rawgeti
 
-    lua_State *T = lua_newthread(L);
-
-    if (T == NULL) {
-        luaF_error_errno(L, "lua_newthread failed");
-    }
+    lua_State *T = luaF_new_thread_or_error(L);
 
     lua_insert(L, 1); // fn, T -> T, fn
     lua_xmove(L, T, 1); // fn -> T
@@ -43,17 +41,18 @@ int async_loop(lua_State *L) {
     lua_pushvalue(L, -1); // T, ud, ud
     lua_insert(L, 1); // ud, T, ud
 
-    luaL_newmetatable(L, F_MT_LOOP);
-    lua_pushcfunction(L, loop_gc);
-    lua_setfield(L, -2, "__gc");
-    lua_setmetatable(L, -2); // mt -> ud
+    if (luaL_newmetatable(L, F_MT_LOOP)) {
+        lua_pushcfunction(L, loop_gc);
+        lua_setfield(L, -2, "__gc");
+    }
 
+    lua_setmetatable(L, -2); // mt -> ud
     lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
 
-    lua_newtable(L);
+    lua_createtable(L, 0, 4);
     lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_FD_SUBS);
 
-    lua_newtable(L);
+    lua_createtable(L, 0, 4);
     lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
 
     int nres;
@@ -67,7 +66,7 @@ int async_loop(lua_State *L) {
 }
 
 int async_wait(lua_State *L) {
-    luaF_need_args(L, 1);
+    luaF_need_args(L, 1, "wait");
     luaL_checktype(L, 1, LUA_TTHREAD);
 
     if (!lua_isyieldable(L)) {
@@ -88,14 +87,16 @@ int async_pwait(lua_State *L) {
     lua_pushcfunction(L, async_wait);
     lua_insert(L, 1);
 
-    lua_pcallk(L, lua_gettop(L) - 1, LUA_MULTRET, 0, 0, pwait_continue);
+    int status = lua_pcallk(L,
+        lua_gettop(L) - 1,
+        LUA_MULTRET,
+        0, 0,
+        pwait_continue);
 
-    // if lua_pcallk fails before yielding, it exits with err status
-    // otherwise it never returns
+    lua_pushboolean(L, status == LUA_OK);
+    lua_insert(L, 1);
 
-    lua_pushboolean(L, 0);
-    lua_insert(L, lua_gettop(L) - 1);
-    return 2;
+    return lua_gettop(L);
 }
 
 static int loop_gc(lua_State *L) {
@@ -108,26 +109,28 @@ static int loop_gc(lua_State *L) {
     luaF_close_or_warning(L, loop->fd);
     loop->fd = -1;
 
+    lua_settop(L, 1); // loop
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_FD_SUBS);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
+
+    int fd_subs_idx = 2;
+    int t_subs_idx = 3;
+
     lua_pushnil(L);
-    while (lua_next(L, -2)) {
+    while (lua_next(L, fd_subs_idx)) {
         int fd = lua_tointeger(L, -2);
-        lua_State *fd_sub = lua_tothread(L, -1);
-        luaF_warning(L, "zombie fd sub; fd: %d; sub: %p", fd, fd_sub);
+        loop_notify_fd_sub(L, fd_subs_idx, t_subs_idx, fd, 0, "interrupt");
         lua_pop(L, 1); // lua_next
     }
-    lua_pop(L, 1); // lua_rawgeti
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
     lua_pushnil(L);
-    while (lua_next(L, -2)) {
+    while (lua_next(L, t_subs_idx)) {
         lua_len(L, -1);
         lua_State *thread = lua_tothread(L, -3);
         int subs_n = lua_tointeger(L, -1);
         luaF_warning(L, "zombie thread: %p; subs: %d", thread, subs_n);
         lua_pop(L, 2); // lua_next, lua_len
     }
-    lua_pop(L, 1); // lua_rawgeti
 
     lua_pushnil(L);
     lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
@@ -160,7 +163,7 @@ static int loop_yield(lua_State *L, lua_State *MAIN, int nres, int epfd) {
             EPOLL_WAIT_TIMEOUT_MS);
 
         if (nfds == -1) {
-            return luaF_error_errno(L,
+            luaF_error_errno(L,
                 "epoll_wait failed; fd: %d; max events: %d; timeout ms: %d",
                 epfd,
                 EPOLL_WAIT_MAX_EVENTS,
@@ -171,7 +174,7 @@ static int loop_yield(lua_State *L, lua_State *MAIN, int nres, int epfd) {
             int fd = events[n].data.fd;
             int emask = events[n].events;
 
-            loop_notify_fd_sub(L, fd_subs_idx, t_subs_idx, fd, emask);
+            loop_notify_fd_sub(L, fd_subs_idx, t_subs_idx, fd, emask, NULL);
         }
     }
 
@@ -185,6 +188,7 @@ static int loop_yield(lua_State *L, lua_State *MAIN, int nres, int epfd) {
 
 static int loop_error(lua_State *L, lua_State *T, int status) {
     loop_gc(L); // free ridx as fast as possible
+
     return luaL_error(L, "%s: %s",
         luaF_status_label(status),
         lua_tostring(T, -1)); // error msg is on top of T stack
@@ -195,81 +199,45 @@ static inline void loop_notify_fd_sub(
     int fd_subs_idx,
     int t_subs_idx,
     int fd,
-    int emask
+    int emask,
+    const char *errmsg
 ) {
     // closing fd is a burden of the thread that spawned it
     // closing fd auto removes it from epoll (unless it was duped)
 
-    if (lua_rawgeti(L, fd_subs_idx, fd) != LUA_TTHREAD) {
+    int type = lua_rawgeti(L, fd_subs_idx, fd);
+
+    if (type != LUA_TTHREAD) {
         // it's ok for fd_sub to be missing since prev events could remove it
         lua_pop(L, 1); // lua_rawgeti
         return;
     }
 
-    lua_State *SUB = lua_tothread(L, -1);
+    lua_State *sub = lua_tothread(L, -1);
 
-    lua_pushinteger(SUB, fd);
-    lua_pushinteger(SUB, emask);
+    if (errmsg) {
+        lua_pushinteger(sub, fd);
+        lua_pushstring(sub, errmsg);
+    } else {
+        lua_pushinteger(sub, fd);
+        lua_pushinteger(sub, emask);
+    }
 
     int nres;
-    int status = lua_resume(SUB, L, 2, &nres);
+    int status = lua_resume(sub, L, 2, &nres);
 
     if (status == LUA_YIELD) {
-        lua_pop(SUB, nres);
+        lua_pop(sub, nres);
     } else {
-        loop_remove_fd_sub(L, fd_subs_idx, fd);
-        loop_notify_t_subs(L, SUB, t_subs_idx, status, nres);
+        lua_rawgeti(L, fd_subs_idx, fd); // rm if still the same
+        if (lua_topointer(L, -1) == sub) {
+            loop_remove_fd_sub(L, fd_subs_idx, fd);
+        }
+        lua_pop(L, 1); // lua_rawgeti
+        luaF_loop_notify_t_subs(L, sub, t_subs_idx, status, nres);
     }
 
     lua_pop(L, 1); // lua_rawgeti
-}
-
-static void loop_notify_t_subs(
-    lua_State *L,
-    lua_State *T,
-    int t_subs_idx,
-    int status,
-    int nres
-) {
-    luaL_checkstack(L, lua_gettop(L) + 3, "notify subs L");
-    luaL_checkstack(T, lua_gettop(T) + nres, "notify subs T");
-
-    lua_pushvalue(L, -1);
-    if (lua_rawget(L, t_subs_idx) != LUA_TTABLE) { // no subs
-        lua_pop(L, 1); // lua_rawget
-        return;
-    }
-
-    lua_pushnil(L);
-    while (lua_next(L, -2)) {
-        lua_State *SUB = lua_tothread(L, -1);
-
-        luaL_checkstack(SUB, lua_gettop(SUB) + nres + 1, "notify subs SUB");
-        lua_pushinteger(SUB, status);
-
-        for (int index = 1; index <= nres; ++index) {
-            lua_pushvalue(T, index);
-        }
-
-        lua_xmove(T, SUB, nres);
-
-        int sub_nres;
-        int sub_status = lua_resume(SUB, L, nres + 1, &sub_nres);
-
-        if (status == LUA_YIELD) {
-            lua_pop(SUB, sub_nres);
-        } else {
-            loop_notify_t_subs(L, SUB, t_subs_idx, sub_status, sub_nres);
-        }
-
-        lua_pop(L, 1); // lua_next
-    }
-
-    lua_pop(L, 1); // lua_rawget
-
-    lua_pushvalue(L, -1);
-    lua_pushnil(L);
-    lua_rawset(L, t_subs_idx); // t_subs[thread] = nil
 }
 
 static int wait_ok(lua_State *L, lua_State *T) {
@@ -293,15 +261,15 @@ static int wait_ok(lua_State *L, lua_State *T) {
     return nres;
 }
 
-static int wait_yield(lua_State *L, int t_index) {
+static int wait_yield(lua_State *L, int thread_idx) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS); // t_subs
-    lua_pushvalue(L, t_index); // t_subs, T
+    lua_pushvalue(L, thread_idx); // t_subs, T
 
     if (lua_rawget(L, -2) == LUA_TTABLE) { // T already has subscribers
         lua_pushthread(L); // t_subs, subs, L
         lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
     } else { // T has no subs
-        lua_pushvalue(L, t_index); // t_subs, nil, T
+        lua_pushvalue(L, thread_idx); // t_subs, nil, T
         lua_createtable(L, 1, 0); // t_subs, nil, T, subs
         lua_pushthread(L); // t_subs, nil, T, subs, L
         lua_rawseti(L, -2, 1); // subs[1] = L
@@ -320,7 +288,6 @@ static int wait_error(lua_State *L, lua_State *T, int status) {
 }
 
 static int wait_continue(lua_State *L, int status, lua_KContext ctx) {
-    (void)status;
     (void)ctx;
 
     status = lua_tointeger(L, 2);
@@ -335,7 +302,6 @@ static int wait_continue(lua_State *L, int status, lua_KContext ctx) {
 static int pwait_continue(lua_State *L, int status, lua_KContext ctx) {
     (void)ctx;
 
-    // LUA_YIELD on success, LUA_ERR* on error
     lua_pushboolean(L, status == LUA_YIELD);
     lua_insert(L, 1);
 

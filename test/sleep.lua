@@ -1,26 +1,23 @@
-local async = require "async"
+local perf = require "test.perf"
+local trace = require "trace"
 local sleep = require "sleep"
-local time = require "time"
+local async = require "async"
 local wait = async.wait
+local pwait = async.pwait
 
 return function()
-    local ts1 = time()
+    perf()
+        local t1 = sleep(0.02)
+        local t2 = sleep(0.012)
+        local t3 = coroutine.create(function(duration_s)
+            return wait(sleep(duration_s))
+        end)
+        assert(coroutine.resume(t3, 0.03))
+    perf("sleep prepare")
 
-    local t1 = sleep(.5)
-    local t2 = sleep(.7)
-    local t3 = coroutine.create(function(duration_s)
-        return wait(sleep(duration_s))
-    end)
-
-    assert(coroutine.resume(t3, 1))
-
-    wait(t1)
-    wait(t2)
-    wait(t3)
-
-    local ts2 = time()
-
-    print("ts start:", ts1)
-    print("ts finish:", ts2)
-    print("duration:", ts2 - ts1, "s")
+    perf()
+        trace("t1:", pwait(t1))
+        trace("t2:", pwait(t2))
+        trace("t3:", pwait(t3))
+    perf("sleep wait")
 end

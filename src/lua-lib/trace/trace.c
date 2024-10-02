@@ -6,13 +6,18 @@ LUAMOD_API int luaopen_trace(lua_State *L) {
 }
 
 static int trace(lua_State *L) {
-    lua_createtable(L, 0, CACHE_MIN_SIZE);
-    lua_insert(L, CACHE_IDX);
-
     int args_n = lua_gettop(L);
 
-    for (int index = 2; index <= args_n; ++index) {
-        trace_value(L, index, 0, MODE_VARIABLE);
+    if (args_n == 0) {
+        return 0;
+    }
+
+    lua_createtable(L, 0, CACHE_MIN_SIZE);
+    lua_insert(L, CACHE_IDX); // must be 1
+
+    for (int index = 1; index <= args_n; ++index) {
+        trace_value(L, index + 1, 0, MODE_VARIABLE);
+        fputc(index == args_n ? '\n' : ' ', stderr);
     }
 
     return 0;
@@ -57,7 +62,7 @@ static void trace_value(lua_State *L, int index, int depth, int mode) {
 
     if (mode == MODE_TABLE_KEY) {
         fprintf(stream, " = ");
-    } else if (type >= LUA_TNONE && type < LUA_NUMTYPES) {
+    } else if (mode == MODE_TABLE_VALUE) {
         fputc('\n', stream);
     }
 }
@@ -82,7 +87,7 @@ static void trace_table(lua_State *L, int index, int depth) {
     int v_index = 0;
 
     lua_pushnil(L);
-    while (lua_next(L, index) != 0) {
+    while (lua_next(L, index)) {
         if (!v_index) {
             v_index = lua_gettop(L);
             k_index = v_index - 1;

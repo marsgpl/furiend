@@ -9,5 +9,9 @@ local loop = async.loop
 warn "@on"
 
 loop(function()
-    require "test.sleep" ()
+    -- require "test.sha2" ()
+    -- require "test.equal" ()
+    require "test.json" ()
+    -- require "test.sleep" ()
+    -- require "test.dns" ()
 end)

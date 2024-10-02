@@ -6,7 +6,9 @@ LUAMOD_API int luaopen_time(lua_State *L) {
 }
 
 static int get_time(lua_State *L) {
-    static struct timespec ts;
+    luaF_need_args(L, 0, "time");
+
+    struct timespec ts;
 
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
         luaF_error_errno(L, "clock_gettime failed");

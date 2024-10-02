@@ -1,8 +1,9 @@
 #include "lib.h"
 
-extern void luaF_need_args(lua_State *L, int args_n) {
-    if (lua_gettop(L) != args_n) {
-        luaL_error(L, "need args: %d; have: %d", args_n, lua_gettop(L));
+extern void luaF_need_args(lua_State *L, int need_args_n, const char *label) {
+    if (lua_gettop(L) != need_args_n) {
+        luaL_error(L, "%s: need args: %d; provided: %d",
+            label, need_args_n, lua_gettop(L));
     }
 }
 
@@ -15,19 +16,29 @@ extern void luaF_close_or_warning(lua_State *L, int fd) {
     }
 }
 
-extern int luaF_error_fd(lua_State *L, int fd, const char *cause) {
+extern lua_State *luaF_new_thread_or_error(lua_State *L) {
+    lua_State *T = lua_newthread(L);
+
+    if (T == NULL) {
+        luaF_error_errno(L, "lua_newthread failed");
+    }
+
+    return T;
+}
+
+extern void luaF_push_error_socket(lua_State *L, int fd, const char *cause) {
     int val;
     socklen_t val_len = sizeof(val);
 
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &val, &val_len) == -1) {
         luaF_warning_errno(L, "getsockopt failed"
-            "; fd: %d; level: SOL_SOCKET (%d)"
-            "; opt: SO_ERROR (%d); opt val len: %d",
+            "; fd: %d; level: %d; opt: %d; opt val len: %d",
             fd, SOL_SOCKET, SO_ERROR, val_len);
     }
 
-    return luaL_error(L, "fd error: %s (#%d); fd: %d; cause: %s",
-        strerror(val), val, fd, cause);
+    lua_pushfstring(L, "%s; fd: %d; socket error: %s (#%d)",
+        strerror(val), val, fd,
+        cause == NULL ? "socket operation failed" : cause);
 }
 
 // https://www.lua.org/manual/5.4/manual.html#4.4.1
@@ -54,7 +65,7 @@ extern void luaF_print_string(lua_State *L, int index, FILE *stream) {
         unsigned char c = str[i];
 
         if (c < 32 || c == '"' || c == '\\' || c >= 127) {
-            fprintf(stream, "\\%u", c);
+            fprintf(stream, "\\x%X%X", (c >> 4) % 16, c % 16);
         } else {
             putc(c, stream);
         }
@@ -119,13 +130,17 @@ extern void luaF_trace(lua_State *L, const char *label) {
     FILE *stream = stderr;
     int stack_size = lua_gettop(L);
 
-    fprintf(stream, F_DEBUG_SEP "%s\nstack size: %d\n", label, stack_size);
+    fprintf(stream, F_DEBUG_SEP);
+    fprintf(stream, "%s\n", label);
+    fprintf(stream, "stack size: %d\n", stack_size);
 
     for (int index = 1; index <= stack_size; ++index) {
         fprintf(stream, "    %d%*s", index, index > 9 ? 3 : 4, "");
 
         if (lua_type(L, index) == LUA_TTABLE) {
             fprintf(stream, "table: %p {\n", lua_topointer(L, index));
+
+            luaL_checkstack(L, lua_gettop(L) + 4, "luaF_trace");
 
             lua_pushnil(L);
             while (lua_next(L, index)) {
@@ -149,14 +164,17 @@ extern void luaF_trace(lua_State *L, const char *label) {
 }
 
 static int loop_watch(lua_State *L) {
-    luaF_need_args(L, 2);
-
     int fd = luaL_checkinteger(L, 1);
     int emask = luaL_checkinteger(L, 2);
+    // 3 = sub thread, can differ from L
 
-    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP); // fd, emask, sub, loop
 
     ud_loop *loop = luaL_checkudata(L, -1, F_MT_LOOP);
+
+    if (loop->fd == -1) {
+        luaL_error(L, "watch failed: loop is closed");
+    }
 
     struct epoll_event ee = {0};
 
@@ -169,22 +187,110 @@ static int loop_watch(lua_State *L) {
             loop->fd, fd, emask);
     }
 
+    lua_settop(L, 3); // fd, emask, sub
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_FD_SUBS);
-
-    lua_pushthread(L);
-    lua_rawseti(L, -2, fd); // fd_subs[fd] = L
-
-    lua_pop(L, 2); // F_RIDX_LOOP, F_RIDX_LOOP_FD_SUBS
+    lua_insert(L, 3); // fd, emask, fd_subs, sub
+    lua_rawseti(L, 3, fd); // fd_subs[fd] = sub
 
     return 0;
 }
 
 // fd is auto removed from loop epoll on close(fd) (unless it was duped)
-// fd is removed from fd_subs by loop on thread finish (ok or error)
+// fd is removed from fd_subs by loop on thread finish
 // so luaF_loop_unwatch is not needed
-extern int luaF_loop_pwatch(lua_State *L, int fd, int emask) {
+extern int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx) {
+    luaL_checkstack(L, lua_gettop(L) + 4, "luaF_loop_pwatch");
+
     lua_pushcfunction(L, loop_watch);
     lua_pushinteger(L, fd);
     lua_pushinteger(L, emask);
-    return lua_pcall(L, 2, 0, 0);
+
+    if (sub_idx) {
+        lua_pushvalue(L, sub_idx);
+    } else {
+        lua_pushthread(L);
+    }
+
+    return lua_pcall(L, 3, 0, 0);
+}
+
+extern void luaF_loop_notify_t_subs(
+    lua_State *L,
+    lua_State *T,
+    int t_subs_idx,
+    int status,
+    int nres
+) {
+    luaL_checkstack(L, lua_gettop(L) + 4, "notify subs L");
+    luaL_checkstack(T, lua_gettop(T) + nres, "notify subs T");
+
+    lua_pushvalue(L, -1);
+    if (lua_rawget(L, t_subs_idx) != LUA_TTABLE) { // no subs
+        lua_pop(L, 1); // lua_rawget
+        return;
+    }
+
+    lua_pushnil(L);
+    while (lua_next(L, -2)) {
+        lua_State *sub = lua_tothread(L, -1);
+
+        luaL_checkstack(sub, lua_gettop(sub) + nres + 1, "notify subs sub");
+        lua_pushinteger(sub, status);
+
+        for (int index = 1; index <= nres; ++index) {
+            lua_pushvalue(T, index);
+        }
+
+        lua_xmove(T, sub, nres);
+
+        int sub_nres;
+        int sub_status = lua_resume(sub, L, nres + 1, &sub_nres);
+
+        if (status == LUA_YIELD) {
+            lua_pop(sub, sub_nres);
+        } else {
+            luaF_loop_notify_t_subs(L, sub, t_subs_idx, sub_status, sub_nres);
+        }
+
+        lua_pop(L, 1); // lua_next
+    }
+
+    lua_pop(L, 1); // lua_rawget
+
+    lua_pushvalue(L, -1);
+    lua_pushnil(L);
+    lua_rawset(L, t_subs_idx); // t_subs[thread] = nil
+}
+
+extern int luaF_set_timeout(lua_State *L, lua_Number duration_s) {
+    long sec = duration_s;
+    long nsec = (duration_s - sec) * 1e9;
+
+    int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+
+    if (fd == -1) {
+        luaF_error_errno(L, "timerfd_create failed; clock id: %d; flags: %d",
+            CLOCK_MONOTONIC, TFD_NONBLOCK);
+    }
+
+    struct itimerspec tm = {0};
+
+    tm.it_value.tv_sec = sec;
+    tm.it_value.tv_nsec = nsec;
+
+    if (timerfd_settime(fd, 0, &tm, NULL) == -1) {
+        luaF_close_or_warning(L, fd);
+        luaF_error_errno(L, "timerfd_settime failed"
+            "; fd: %d; sec: %d; nsec: %d",
+            fd, sec, nsec);
+    }
+
+    int status = luaF_loop_pwatch(L, fd, EPOLLIN | EPOLLONESHOT, 0);
+
+    if (status != LUA_OK) {
+        luaF_close_or_warning(L, fd);
+        lua_error(L);
+    }
+
+    return fd;
 }
