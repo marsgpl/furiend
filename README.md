@@ -25,40 +25,34 @@ docker network rm furiend
 
 ```sh
 mkdir -p /furiend/vendor
-mkdir -p /furiend/bin
 cd /furiend/vendor
 wget https://www.lua.org/ftp/lua-5.4.7.tar.gz
 tar -xvf lua-5.4.7.tar.gz
 cd lua-5.4.7
 make linux test
+mkdir -p /furiend/bin
 cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
 ```
 
-## LuaRocks
-
-```sh
-cd /furiend/vendor
-wget https://luarocks.org/releases/luarocks-3.11.1.tar.gz
-tar -xvf luarocks-3.11.1.tar.gz
-./configure --with-lua-include=/furiend/vendor/lua-5.4.7/src
-make install
-```
-
 ## TODO
 
+- json
+- redis
 - url
-- http client
-- tls
-- redis client
 - log
-- simplify dns async boilerplate
-- dns client support more types
-- dns client ip6
-- fs (file, dir, stat)
+- http: ip6, plain read/write, keep-alive, parse response len, server,
+    reuse string buffers, params: url, timeout, custom request headers,
+    param: query, POST body, crt verification, more validations, reuse ssl,
+    http 2+, quic, prop: add_response_headline (http/1.1 200 ok)
+- cookie
+- dns: more types, ip6
+- simplify async boilerplate
+- fs: file, dir, stat
+- string utils: tcp stream packet separation
 - socket
-- buffer (tcp stream packet separation)
-- custom epoll
-- string utils
+- epoll
 - sandbox
-- thread
+- posix threads
+- fork
+- review all libs

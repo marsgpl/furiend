@@ -7,7 +7,7 @@ LUAMOD_API int luaopen_json(lua_State *L) {
 
 int json_parse(lua_State *L) {
     luaF_need_args(L, 1, "json.parse");
-    luaL_checktype(L, 1, LUA_TSTRING);
+    luaL_checktype(L, 1, LUA_TSTRING); // stringified json
 
     lua_pushnil(L);
     return 1;

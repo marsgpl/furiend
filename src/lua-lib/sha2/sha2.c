@@ -100,7 +100,7 @@ static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash) {
 
 int sha512(lua_State *L) {
     luaF_need_args(L, 1, "sha512");
-    luaL_checktype(L, 1, LUA_TSTRING);
+    luaL_checktype(L, 1, LUA_TSTRING); // phrase to hash
 
     size_t len;
     const char *input = lua_tolstring(L, 1, &len);
@@ -110,7 +110,7 @@ int sha512(lua_State *L) {
     }
 
     static uint64_t hash[8];
-    static char hex[128];
+    static char hex[128 + 1]; // 1 for sprintf nul byte
 
     int is_ok = sha512_hash((const uint8_t *)input, len, hash);
 

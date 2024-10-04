@@ -2,7 +2,9 @@
 #define FURIEND_LIB_H
 
 #define _POSIX_C_SOURCE 199309L // CLOCK_MONOTONIC
+#define _GNU_SOURCE // clock_gettime
 
+#include <time.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -28,9 +30,19 @@
 #define F_RIDX_LOOP_FD_SUBS 1002 // fd_subs[fd] = sub
 #define F_RIDX_LOOP_T_SUBS 1003 // t_subs[thread] = { sub1, sub2, ... }
 
+#define F_GETSOCKOPT_FAILED -1 // see get_socket_error_code
+
 typedef struct {
     int fd;
 } ud_loop;
+
+#define luaF_print_time(L, label) { \
+    struct timespec ts; \
+    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) { \
+        luaF_error_errno(L, "clock_gettime failed"); \
+    } \
+    printf("%s: %f\n", label, ts.tv_sec + ts.tv_nsec * 1e-9); \
+}
 
 #define luaF_warning(L, msg, ...) { \
     luaL_checkstack(L, lua_gettop(L) + 1, "luaF_warning"); \
@@ -40,24 +52,19 @@ typedef struct {
 }
 
 #define luaF_warning_errno(L, msg, ...) \
-    luaF_warning(L, msg "; errno: %s (#%d)" \
+    luaF_warning(L, msg "; errno: %s (%d)" \
         __VA_OPT__(,) __VA_ARGS__, \
         strerror(errno), \
         errno)
 
 #define luaF_error_errno(L, msg, ...) \
-    luaL_error(L, msg "; errno: %s (#%d)" \
+    luaL_error(L, msg "; errno: %s (%d)" \
         __VA_OPT__(,) __VA_ARGS__, \
         strerror(errno), \
         errno) \
 
-#define luaF_error_socket(L, fd, cause) { \
-    luaF_push_error_socket(L, fd, cause); \
-    lua_error(L); \
-}
-
 #define luaF_push_error_errno(L, cause) \
-    lua_pushfstring(L, "%s; errno: %s (#%d)", cause, strerror(errno), errno)
+    lua_pushfstring(L, "%s; errno: %s (%d)", cause, strerror(errno), errno)
 
 #define luaF_set_kv_int(L, table_idx, key, value) { \
     lua_pushinteger(L, value); \
@@ -84,16 +91,24 @@ typedef struct {
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
+extern int get_socket_error_code(int fd);
+
 extern void luaF_trace(lua_State *L, const char *label);
 extern void luaF_print_value(lua_State *L, int index, FILE *stream);
 extern void luaF_print_string(lua_State *L, int index, FILE *stream);
 extern void luaF_close_or_warning(lua_State *L, int fd);
-extern lua_State *luaF_new_thread_or_error(lua_State *L);
-extern void luaF_push_error_socket(lua_State *L, int fd, const char *cause);
 extern void luaF_need_args(lua_State *L, int need_args_n, const char *label);
 extern int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx);
-extern const char *luaF_status_label(int status);
 extern int luaF_set_timeout(lua_State *L, lua_Number duration_s);
+extern int luaF_error_socket(lua_State *L, int fd, const char *cause);
+extern lua_State *luaF_new_thread_or_error(lua_State *L);
+extern const char *luaF_status_label(int status);
+
+extern void luaF_push_error_socket(
+    lua_State *L,
+    int fd,
+    const char *cause,
+    int socket_error_code);
 
 extern void luaF_loop_notify_t_subs(
     lua_State *L,

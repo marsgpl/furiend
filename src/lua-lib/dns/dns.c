@@ -31,19 +31,19 @@ LUAMOD_API int luaopen_dns(lua_State *L) {
 
 static int dns_client(lua_State *L) {
     luaF_need_args(L, 1, "dns.client");
-    luaL_checktype(L, 1, LUA_TTABLE);
+    luaL_checktype(L, 1, LUA_TTABLE); // config
 
-    lua_getfield(L, 1, "addr");
+    lua_getfield(L, 1, "ip4");
     lua_getfield(L, 1, "port");
     lua_getfield(L, 1, "timeout");
     lua_getfield(L, 1, "parallel");
 
-    int status, nres;
-
-    const char *addr = luaL_checkstring(L, 2);
+    const char *ip4 = luaL_checkstring(L, 2);
     int port = luaL_optinteger(L, 3, DNS_DEFAULT_PORT);
     lua_Number tmt = luaL_optnumber(L, 4, DNS_DEFAULT_TIMEOUT);
     int parallel = lua_toboolean(L, 5);
+
+    int status, nres;
 
     ud_dns_client *client = lua_newuserdatauv(L, sizeof(ud_dns_client), 2);
 
@@ -62,29 +62,26 @@ static int dns_client(lua_State *L) {
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
 
-    status = inet_pton(AF_INET, addr, &sa.sin_addr);
+    status = inet_pton(AF_INET, ip4, &sa.sin_addr);
 
     if (status == 0) { // invalid format
         luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
-            AF_INET, addr);
+            AF_INET, ip4);
     } else if (status != 1) { // other errors
         luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
-            AF_INET, addr);
+            AF_INET, ip4);
     }
 
     int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
 
     if (fd == -1) {
-        luaF_error_errno(L, "socket failed"
-            "; domain: %d"
-            "; type + flags: %d"
-            "; protocol: %d",
-            AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
+        luaF_error_errno(L, "socket failed (udp nonblock)");
     }
 
     if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) != 0) {
+        // should bind immediately
         luaF_close_or_warning(L, fd);
-        luaF_error_errno(L, "binding failed; addr: %s:%d", addr, port);
+        luaF_error_errno(L, "binding failed; addr: %s:%d", ip4, port);
     }
 
     client->fd = fd;
@@ -349,7 +346,7 @@ int dns_client_resolve(lua_State *L) {
 static int resolve_start(lua_State *L) {
     ud_dns_client *client = lua_touserdata(L, 1);
 
-    luaL_checktype(L, 2, LUA_TTABLE);
+    luaL_checktype(L, 2, LUA_TTABLE); // params
     lua_getfield(L, 2, "name");
     lua_getfield(L, 2, "type");
     lua_getfield(L, 2, "class");
@@ -452,12 +449,11 @@ static void unsub_req_id(lua_State *L, int client_idx, int req_id) {
     lua_pop(L, 1); // lua_getiuservalue
 }
 
+// client, tmt_fd, req_id, is_ok, req_id / err_msg
+// client, tmt_fd, req_id, tmt_fd, emask
 static int resolve_continue(lua_State *L, int status, lua_KContext ctx) {
     (void)ctx;
     (void)status;
-
-    // client, tmt_fd, req_id, is_ok, req_id / err_msg
-    // client, tmt_fd, req_id, tmt_fd, emask
 
     luaF_close_or_warning(L, lua_tointeger(L, 2));
 

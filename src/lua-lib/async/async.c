@@ -7,7 +7,7 @@ LUAMOD_API int luaopen_async(lua_State *L) {
 
 int async_loop(lua_State *L) {
     luaF_need_args(L, 1, "loop");
-    luaL_checktype(L, 1, LUA_TFUNCTION);
+    luaL_checktype(L, 1, LUA_TFUNCTION); // loop fn
 
     int type = lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
 
@@ -67,7 +67,7 @@ int async_loop(lua_State *L) {
 
 int async_wait(lua_State *L) {
     luaF_need_args(L, 1, "wait");
-    luaL_checktype(L, 1, LUA_TTHREAD);
+    luaL_checktype(L, 1, LUA_TTHREAD); // thread to wait for
 
     if (!lua_isyieldable(L)) {
         luaL_error(L, "current thread is not yieldable: %p", (void *)L);

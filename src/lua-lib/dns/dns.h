@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <furiend/lib.h>
 
-#define MT_DNS_CLIENT "dns_client*"
+#define MT_DNS_CLIENT "dns.client*"
 
 // rfc1035#section-3.2.2
 #define DNS_TYPE_A 1 // ipv4 address
@@ -21,7 +21,7 @@
 #define DNS_DEFAULT_PORT 53
 #define DNS_DEFAULT_TYPE DNS_TYPE_A
 #define DNS_DEFAULT_CLASS DNS_CLASS_IN
-#define DNS_DEFAULT_TIMEOUT 0 // 0 - unlimited
+#define DNS_DEFAULT_TIMEOUT 1.0 // 0 - unlimited
 
 #define NAME_MAX_LEN 255 // label.label
 #define LABEL_MAX_LEN 63

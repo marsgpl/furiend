@@ -26,19 +26,38 @@ extern lua_State *luaF_new_thread_or_error(lua_State *L) {
     return T;
 }
 
-extern void luaF_push_error_socket(lua_State *L, int fd, const char *cause) {
-    int val;
-    socklen_t val_len = sizeof(val);
+extern int get_socket_error_code(int fd) {
+    int value;
+    socklen_t value_len = sizeof(value);
 
-    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &val, &val_len) == -1) {
-        luaF_warning_errno(L, "getsockopt failed"
-            "; fd: %d; level: %d; opt: %d; opt val len: %d",
-            fd, SOL_SOCKET, SO_ERROR, val_len);
+    int r = getsockopt(fd, SOL_SOCKET, SO_ERROR, &value, &value_len);
+
+    return r == -1 ? F_GETSOCKOPT_FAILED : value;
+}
+
+extern int luaF_error_socket(lua_State *L, int fd, const char *cause) {
+    int socket_error_code = get_socket_error_code(fd);
+    luaF_push_error_socket(L, fd, cause, socket_error_code);
+    return lua_error(L);
+}
+
+extern void luaF_push_error_socket(
+    lua_State *L,
+    int fd,
+    const char *cause,
+    int socket_error_code
+) {
+    if (cause == NULL) {
+        cause = "socket operation failed (cause not provided)";
     }
 
-    lua_pushfstring(L, "%s; fd: %d; socket error: %s (#%d)",
-        strerror(val), val, fd,
-        cause == NULL ? "socket operation failed" : cause);
+    if (socket_error_code == F_GETSOCKOPT_FAILED) {
+        lua_pushfstring(L, "%s; fd: %d; getsockopt failed: %s (%d)",
+            strerror(errno), errno, fd, cause);
+    } else {
+        lua_pushfstring(L, "%s; fd: %d; error: %s (%d)",
+            strerror(socket_error_code), socket_error_code, fd, cause);
+    }
 }
 
 // https://www.lua.org/manual/5.4/manual.html#4.4.1

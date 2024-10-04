@@ -12,10 +12,7 @@ local pwait = async.pwait
 
 return function()
     perf()
-        local client = dns.client {
-            timeout = 1.0,
-            addr = "1.1.1.1",
-        }
+        local client = dns.client { ip4 = "1.1.1.1" }
         local r1 = client:resolve { name = "cloudflare.com" }
         local r2 = client:resolve { name = "google.com" }
     perf("dns prepare")

@@ -1,6 +1,7 @@
 /bin/lua
 /bin/luac
 /vendor
+/include/vendor
 *.o
 *.so
 *.luac
