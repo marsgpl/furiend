@@ -316,7 +316,7 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
         line_len = pos - line + 2; // +2 for \r\n
         pos = memchr(line, ' ', line_len);
 
-        if (pos != NULL) {
+        if (pos) {
             // HTTP/1.1
             ver = line;
             ver_len = pos - line;
@@ -334,8 +334,8 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
             if (msg_len < 0) msg_len = 0;
         }
 
-        line += line_len;
         rest_len -= line_len;
+        line += line_len;
     }
 
     // version, code, message, headers, body, request?
@@ -351,6 +351,35 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
     lua_setfield(L, -2, "message");
 
     lua_createtable(L, 0, HTTP_EXPECT_RESPONSE_HEADERS_N);
+
+    while (1) {
+        pos = memchr(line, '\r', rest_len);
+
+        if (pos == NULL || *(pos + 1) != '\n') {
+            break;
+        }
+
+        line_len = pos - line + 2; // +2 for \r\n
+        rest_len -= line_len;
+
+        if (line_len == 2) { // \r\n\r\n
+            break;
+        }
+
+        pos = memchr(line, ':', line_len);
+
+        if (pos) {
+            lua_pushlstring(L, line, pos - line); // k
+            lua_pushlstring(L, pos + 2, line_len - (pos - line) - 2 - 2); // v
+            lua_rawset(L, -3);
+        } else {
+            lua_pushlstring(L, line, line_len - 2);
+            lua_setfield(L, -2, "");
+        }
+
+        line += line_len;
+    }
+
     lua_setfield(L, -2, "headers");
 
     lua_pushlstring(L, req->response + req->response_len - rest_len, rest_len);
@@ -368,9 +397,47 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
     return 1;
 }
 
+static void http_request_on_send_complete(lua_State *L, ud_http_request *req) {
+    if (!req->show_request) {
+        free(req->headers);
+        req->headers = NULL;
+    }
+
+    req->response_size = HTTP_RESPONSE_INITIAL_SIZE;
+    req->response = malloc(req->response_size);
+
+    if (req->response == NULL) {
+        luaF_error_errno(L, "response malloc failed; size: %d",
+            req->response_size);
+    }
+}
+
 static void http_request_sending_plain(lua_State *L, ud_http_request *req) {
-    luaL_error(L, "TODO: http_request_sending_plain; fd: %d", req->fd);
-    // after send complete: see tls
+    while (req->headers_len_sent < req->headers_len) {
+        ssize_t sent = send(req->fd,
+            req->headers + req->headers_len_sent,
+            req->headers_len - req->headers_len_sent,
+            MSG_NOSIGNAL);
+
+        if (sent == 0) {
+            luaL_error(L, "send sent 0");
+        } else if (sent == -1) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                luaF_error_errno(L, "send failed; len: %d; sent: %d",
+                    req->headers_len - req->headers_len_sent,
+                    sent);
+            }
+
+            return; // try again later
+        }
+
+        req->headers_len_sent += sent;
+    }
+
+    http_request_on_send_complete(L, req);
+
+    req->state = HTTP_REQ_STATE_READING_PLAIN;
+    http_request_reading_plain(L, req);
 }
 
 static void http_request_sending_tls(lua_State *L, ud_http_request *req) {
@@ -388,56 +455,73 @@ static void http_request_sending_tls(lua_State *L, ud_http_request *req) {
                 ssl_error_ret(L, "SSL_write", req->ssl, sent);
             }
 
-            return;
+            return; // try again later
         }
 
         req->headers_len_sent += sent;
     }
 
-    if (!req->show_request) {
-        free(req->headers);
-        req->headers = NULL;
-    }
-
-    req->response_size = HTTP_RESPONSE_INITIAL_SIZE;
-    req->response = malloc(req->response_size);
-
-    if (req->response == NULL) {
-        luaF_error_errno(L, "response malloc failed; size: %d",
-            req->response_size);
-    }
+    http_request_on_send_complete(L, req);
 
     req->state = HTTP_REQ_STATE_READING_TLS;
     http_request_reading_tls(L, req);
 }
 
+static inline void realloc_response_buf(lua_State *L, ud_http_request *req) {
+    // -1 reserves extra byte for '\0'
+    if (req->response_size - req->response_len < HTTP_READ_MAX - 1) {
+        // to avoid lots of allocs, start parsing response in advance
+        // and try to find response size (content length or chunk length)
+        int size = req->response_size * 2;
+
+        if (size > HTTP_RESPONSE_MAX_SIZE) {
+            luaL_error(L, "response is too big; max: %d",
+                HTTP_RESPONSE_MAX_SIZE);
+        }
+
+        char *p = realloc(req->response, size);
+
+        if (p == NULL) {
+            luaF_error_errno(L, "response realloc error; size: %d", size);
+        }
+
+        req->response = p;
+        req->response_size = size;
+    }
+}
+
 static void http_request_reading_plain(lua_State *L, ud_http_request *req) {
-    luaL_error(L, "TODO: http_request_reading_plain; fd: %d", req->fd);
-    // after read complete: see tls
+    while (1) {
+        realloc_response_buf(L, req);
+
+        ssize_t read = recv(req->fd,
+            req->response + req->response_len,
+            HTTP_READ_MAX,
+            0);
+
+        if (read == 0) {
+            req->state = HTTP_REQ_STATE_DONE;
+            return;
+        } else if (read == -1) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                luaF_error_errno(L, "recv failed; fd: %d", req->fd);
+            }
+
+            return; // try again later
+        }
+
+        req->response_len += read;
+
+        if (0) { // all data received
+            req->state = HTTP_REQ_STATE_DONE;
+            return;
+        }
+    }
 }
 
 static void http_request_reading_tls(lua_State *L, ud_http_request *req) {
     while (1) {
-        // -1 reserves extra byte for '\0'
-        if (req->response_size - req->response_len < HTTP_READ_MAX - 1) {
-            // to avoid lots of allocs, start parsing response in advance
-            // and try to find response size (content length or chunk length)
-            int size = req->response_size * 2;
-
-            if (size > HTTP_RESPONSE_MAX_SIZE) {
-                luaL_error(L, "response is too big; max: %d",
-                    HTTP_RESPONSE_MAX_SIZE);
-            }
-
-            char *p = realloc(req->response, size);
-
-            if (p == NULL) {
-                luaF_error_errno(L, "response realloc error; size: %d", size);
-            }
-
-            req->response = p;
-            req->response_size = size;
-        }
+        realloc_response_buf(L, req);
 
         int read = SSL_read(req->ssl,
             req->response + req->response_len,

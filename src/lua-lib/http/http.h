@@ -79,12 +79,14 @@ static void http_request_sending_tls(lua_State *L, ud_http_request *req);
 static void http_request_reading_plain(lua_State *L, ud_http_request *req);
 static void http_request_reading_tls(lua_State *L, ud_http_request *req);
 static void http_request_shutdown_tls(lua_State *L, ud_http_request *req);
+static void http_request_on_send_complete(lua_State *L, ud_http_request *req);
 static int http_request_finish(lua_State *L, ud_http_request *req);
+static void http_check_params(lua_State *L, http_params *params);
 static int ssl_warn_err_stack(lua_State *L);
 static int ssl_error(lua_State *L, const char *fn_name);
 static int ssl_error_ret(lua_State *L, const char *fn_name, SSL *ssl, int ret);
 static int ssl_error_verify(lua_State *L, long result);
-static void http_check_params(lua_State *L, http_params *params);
+static inline void realloc_response_buf(lua_State *L, ud_http_request *req);
 
 static void http_parse_params(
     lua_State *L,

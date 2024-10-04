@@ -41,10 +41,10 @@ cp src/luac /furiend/bin/
 - redis
 - url
 - log
-- http: ip6, plain read/write, keep-alive, parse response len, server,
-    reuse string buffers, params: url, timeout, custom request headers,
-    param: query, POST body, crt verification, more validations, reuse ssl,
-    http 2+, quic, prop: add_response_headline (http/1.1 200 ok)
+- http: ip6, keep-alive, parse response len, server, reuse string buffers,
+    params: url, timeout, custom request headers, param: query, POST body,
+    crt verification, more validations, reuse ssl, http 2+, gzip, quic,
+    prop: add_response_headline
 - cookie
 - dns: more types, ip6
 - simplify async boilerplate
