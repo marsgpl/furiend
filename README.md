@@ -24,8 +24,7 @@ docker network rm furiend
 ## Lua
 
 ```sh
-mkdir -p /furiend/vendor
-cd /furiend/vendor
+mkdir -p /furiend/vendor && cd /furiend/vendor
 wget https://www.lua.org/ftp/lua-5.4.7.tar.gz
 tar -xvf lua-5.4.7.tar.gz
 cd lua-5.4.7
@@ -35,16 +34,31 @@ cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
 ```
 
+## yyjson
+
+```sh
+mkdir -p /furiend/vendor && cd /furiend/vendor
+wget https://github.com/ibireme/yyjson/archive/refs/heads/master.zip
+mv master.zip yyjson-master.zip
+unzip yyjson-master.zip
+cd yyjson-master
+mkdir build && cd build
+cmake ..
+cmake --build .
+mkdir -p /furiend/include/vendor
+cp libyyjson.a /furiend/include/vendor
+```
+
 ## TODO
 
-- json
 - redis
 - url
 - log
+- json: pass params to yyjson
 - http: ip6, keep-alive, parse response len, server, reuse string buffers,
     params: url, timeout, custom request headers, param: query, POST body,
     crt verification, more validations, reuse ssl, http 2+, gzip, quic,
-    prop: add_response_headline
+    prop: add_response_headline, headers normalization
 - cookie
 - dns: more types, ip6
 - simplify async boilerplate

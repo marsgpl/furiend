@@ -23,9 +23,9 @@ local good = {
     -- LUA_TNUMBER
     123, 123,
     12.3, 1.23e1,
-    0, -0,
-    1/0, math.huge,
-    -1/0, -math.huge,
+    0, -0, -- 0 vs -0
+    1/0, math.huge, -- inf
+    -1/0, -math.huge, -- -inf
     math.mininteger, math.maxinteger + 1,
     -- LUA_TSTRING
     "hi\x00how", "hi\0how",
@@ -53,7 +53,8 @@ local bad = {
     registry._CLIBS[1], registry._CLIBS[2],
     -- LUA_TNUMBER
     123, 123.0,
-    0/0, 1/0,
+    0/0, 1/0, -- nan
+    0/0, 0/0, -- nan
     -- LUA_TSTRING
     "hi\x00how", "hi",
     -- LUA_TTABLE

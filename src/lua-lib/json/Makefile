@@ -4,8 +4,10 @@ LD= gcc
 CCFLAGS= -c -fPIC -O2 -std=c2x -march=native -fno-ident \
     -Wall -Wextra -Wshadow -Wstrict-aliasing -Werror -pedantic
 LDFLAGS= -shared -Wl,-z,max-page-size=0x1000
-INCS= -I/furiend/vendor/lua-5.4.7/src -I/furiend/src
-LIBS=
+INCS= -I/furiend/vendor/lua-5.4.7/src \
+    -I/furiend/vendor/yyjson-master/src \
+    -I/furiend/src
+LIBS= -L/furiend/include/vendor/ -lyyjson
 
 build: $(NAME).so
 

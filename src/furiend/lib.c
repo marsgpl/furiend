@@ -30,9 +30,9 @@ extern int get_socket_error_code(int fd) {
     int value;
     socklen_t value_len = sizeof(value);
 
-    int r = getsockopt(fd, SOL_SOCKET, SO_ERROR, &value, &value_len);
+    int ret = getsockopt(fd, SOL_SOCKET, SO_ERROR, &value, &value_len);
 
-    return r == -1 ? F_GETSOCKOPT_FAILED : value;
+    return ret == -1 ? F_GETSOCKOPT_FAILED : value;
 }
 
 extern int luaF_error_socket(lua_State *L, int fd, const char *cause) {
