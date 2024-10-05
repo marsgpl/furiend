@@ -56,7 +56,7 @@ static int json_parse_value(lua_State *L, yyjson_val *value) {
             lua_pushlstring(L, yyjson_get_str(value), yyjson_get_len(value));
             return 1;
         case YYJSON_TYPE_ARR: {
-            luaL_checkstack(L, lua_gettop(L) + 3, "json.parse");
+            luaL_checkstack(L, 4, "json.parse");
             lua_createtable(L, yyjson_arr_size(value), 0);
 
             size_t idx, max;
@@ -69,7 +69,7 @@ static int json_parse_value(lua_State *L, yyjson_val *value) {
 
             return 1;
         } case YYJSON_TYPE_OBJ: {
-            luaL_checkstack(L, lua_gettop(L) + 3, "json.parse");
+            luaL_checkstack(L, 4, "json.parse");
             lua_createtable(L, 0, yyjson_obj_size(value));
 
             size_t idx, max;
@@ -110,7 +110,7 @@ static yyjson_mut_val *json_stringify_table(
     int index,
     int cache_index
 ) {
-    luaL_checkstack(L, lua_gettop(L) + 3, "json.stringify");
+    luaL_checkstack(L, 4, "json.stringify");
 
     const void *cache_key = lua_topointer(L, index);
 

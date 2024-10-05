@@ -31,28 +31,33 @@ local string = [[
 }
 ]]
 
-local value = json.parse(string)
+local _, value = assert(json.parse(string))
+
+-- trace(json.stringify(value))
+-- trace(cjson.encode(value))
+-- trace(json.parse(string))
+-- trace(cjson.decode(string))
 
 perf()
-    for i = 1, 4000000 do
-        assert(cjson.encode(value))
-    end
-perf("stringify: cjson")
-
-perf()
-    for i = 1, 4000000 do
+    for i = 1, 250000 do
         assert(json.stringify(value))
     end
 perf("stringify: furiend")
 
 perf()
-    for i = 1, 300000 do
-        assert(cjson.decode(string))
+    for i = 1, 250000 do
+        assert(cjson.encode(value))
     end
-perf("parse: cjson")
+perf("stringify: cjson")
 
 perf()
-    for i = 1, 300000 do
+    for i = 1, 250000 do
         assert(json.parse(string))
     end
 perf("parse: yyjson/furiend")
+
+perf()
+    for i = 1, 250000 do
+        assert(cjson.decode(string))
+    end
+perf("parse: cjson      ") -- align spaces

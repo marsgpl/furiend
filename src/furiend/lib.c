@@ -159,7 +159,7 @@ extern void luaF_trace(lua_State *L, const char *label) {
         if (lua_type(L, index) == LUA_TTABLE) {
             fprintf(stream, "table: %p {\n", lua_topointer(L, index));
 
-            luaL_checkstack(L, lua_gettop(L) + 4, "luaF_trace");
+            luaL_checkstack(L, 4, "luaF_trace");
 
             lua_pushnil(L);
             while (lua_next(L, index)) {
@@ -218,7 +218,7 @@ static int loop_watch(lua_State *L) {
 // fd is removed from fd_subs by loop on thread finish
 // so luaF_loop_unwatch is not needed
 extern int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx) {
-    luaL_checkstack(L, lua_gettop(L) + 4, "luaF_loop_pwatch");
+    luaL_checkstack(L, 4, "luaF_loop_pwatch");
 
     lua_pushcfunction(L, loop_watch);
     lua_pushinteger(L, fd);
@@ -240,8 +240,8 @@ extern void luaF_loop_notify_t_subs(
     int status,
     int nres
 ) {
-    luaL_checkstack(L, lua_gettop(L) + 4, "notify subs L");
-    luaL_checkstack(T, lua_gettop(T) + nres, "notify subs T");
+    luaL_checkstack(L, 4, "notify subs L");
+    luaL_checkstack(T, nres, "notify subs T");
 
     lua_pushvalue(L, -1);
     if (lua_rawget(L, t_subs_idx) != LUA_TTABLE) { // no subs
@@ -253,7 +253,7 @@ extern void luaF_loop_notify_t_subs(
     while (lua_next(L, -2)) {
         lua_State *sub = lua_tothread(L, -1);
 
-        luaL_checkstack(sub, lua_gettop(sub) + nres + 1, "notify subs sub");
+        luaL_checkstack(sub, nres + 1, "notify subs sub");
         lua_pushinteger(sub, status);
 
         for (int index = 1; index <= nres; ++index) {

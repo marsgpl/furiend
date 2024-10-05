@@ -45,7 +45,7 @@ typedef struct {
 }
 
 #define luaF_warning(L, msg, ...) { \
-    luaL_checkstack(L, lua_gettop(L) + 1, "luaF_warning"); \
+    luaL_checkstack(L, 1, "luaF_warning"); \
     lua_pushfstring(L, msg __VA_OPT__(,) __VA_ARGS__); \
     lua_warning(L, lua_tostring(L, -1), 0); \
     lua_pop(L, 1); \

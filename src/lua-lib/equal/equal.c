@@ -70,7 +70,7 @@ static int is_equal(lua_State *L, int a_idx, int b_idx, int cache_idx) {
                 return 0; // one is cached, other is not
             }
 
-            luaL_checkstack(L, lua_gettop(L) + 4, "is_equal");
+            luaL_checkstack(L, 4, "is_equal");
 
             int a_len = 0;
             int b_len = 0;

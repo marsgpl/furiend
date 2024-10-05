@@ -249,8 +249,8 @@ static int wait_ok(lua_State *L, lua_State *T) {
 
     // keep results in T in case T would be waited again
 
-    luaL_checkstack(T, lua_gettop(T) + nres, "wait_ok T");
-    luaL_checkstack(L, lua_gettop(L) + nres, "wait_ok L");
+    luaL_checkstack(T, nres, "wait_ok T");
+    luaL_checkstack(L, nres, "wait_ok L");
 
     for (int index = 1; index <= nres; ++index) {
         lua_pushvalue(T, index);
