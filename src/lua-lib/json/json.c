@@ -104,6 +104,50 @@ static int is_array(lua_State *L, int index) { // type is already LUA_TTABLE
     return next_idx - 1; // return array len, 0 - not array
 }
 
+static yyjson_mut_val *json_stringify_table(
+    lua_State *L,
+    int index,
+    yyjson_mut_doc *doc
+) {
+    luaL_checkstack(L, lua_gettop(L) + 3, "json.stringify");
+
+    if (is_array(L, index)) {
+        yyjson_mut_val *arr = yyjson_mut_arr(doc);
+        yyjson_mut_val *val;
+
+        lua_pushnil(L);
+        while (lua_next(L, index)) {
+            val = json_stringify_value(L, index + 2, doc);
+            yyjson_mut_arr_add_val(arr, val);
+            lua_pop(L, 1); // lua_next
+        }
+
+        return arr;
+    }
+
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *val;
+
+    lua_pushnil(L);
+    while (lua_next(L, index)) {
+        if (lua_type(L, -2) != LUA_TSTRING) {
+            fail(L, "key is not a string; type: %s",
+                luaL_typename(L, -2));
+            return NULL;
+        }
+
+        size_t key_len;
+        const char *key = lua_tolstring(L, index + 1, &key_len);
+        val = json_stringify_value(L, index + 2, doc);
+
+        yyjson_mut_obj_add_keyn_val(doc, obj, key, key_len, val);
+
+        lua_pop(L, 1); // lua_next
+    }
+
+    return obj;
+}
+
 static yyjson_mut_val *json_stringify_value(
     lua_State *L,
     int index,
@@ -127,44 +171,9 @@ static yyjson_mut_val *json_stringify_value(
             size_t len;
             const char *str = lua_tolstring(L, index, &len);
             return yyjson_mut_strn(doc, str, len);
-        } case LUA_TTABLE: {
-            luaL_checkstack(L, lua_gettop(L) + 3, "json.stringify");
-
-            if (is_array(L, index)) {
-                yyjson_mut_val *arr = yyjson_mut_arr(doc);
-                yyjson_mut_val *val;
-
-                lua_pushnil(L);
-                while (lua_next(L, index)) {
-                    val = json_stringify_value(L, index + 2, doc);
-                    yyjson_mut_arr_add_val(arr, val);
-                    lua_pop(L, 1); // lua_next
-                }
-
-                return arr;
-            } else {
-                yyjson_mut_val *obj = yyjson_mut_obj(doc);
-                yyjson_mut_val *val;
-
-                lua_pushnil(L);
-                while (lua_next(L, index)) {
-                    if (lua_type(L, -2) != LUA_TSTRING) {
-                        fail(L, "key is not a string; type: %s",
-                            luaL_typename(L, -2));
-                        return NULL;
-                    }
-
-                    size_t key_len;
-                    const char *key = lua_tolstring(L, index + 1, &key_len);
-                    val = json_stringify_value(L, index + 2, doc);
-
-                    yyjson_mut_obj_add_keyn_val(doc, obj, key, key_len, val);
-
-                    lua_pop(L, 1); // lua_next
-                }
-                return obj;
-            }
-        } default: // LUA_TFUNCTION LUA_TTHREAD LUA_TUSERDATA LUA_TLIGHTUSERDATA
+        } case LUA_TTABLE:
+            return json_stringify_table(L, index, doc);
+        default: // LUA_TFUNCTION LUA_TTHREAD LUA_TUSERDATA LUA_TLIGHTUSERDATA
             fail(L, "%s type is not supported", lua_typename(L, type));
             return NULL;
     }
