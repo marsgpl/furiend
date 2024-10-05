@@ -159,8 +159,7 @@ extern void luaF_trace(lua_State *L, const char *label) {
         if (lua_type(L, index) == LUA_TTABLE) {
             fprintf(stream, "table: %p {\n", lua_topointer(L, index));
 
-            luaL_checkstack(L, 4, "luaF_trace");
-
+            luaL_checkstack(L, 4, "trace");
             lua_pushnil(L);
             while (lua_next(L, index)) {
                 fprintf(stream, "%*s", 13, "");
@@ -218,7 +217,7 @@ static int loop_watch(lua_State *L) {
 // fd is removed from fd_subs by loop on thread finish
 // so luaF_loop_unwatch is not needed
 extern int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx) {
-    luaL_checkstack(L, 4, "luaF_loop_pwatch");
+    luaL_checkstack(L, 4, "loop watch");
 
     lua_pushcfunction(L, loop_watch);
     lua_pushinteger(L, fd);

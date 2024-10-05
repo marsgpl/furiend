@@ -70,7 +70,7 @@ static void trace_value(lua_State *L, int index, int depth, int mode) {
 static void trace_table(lua_State *L, int index, int depth) {
     FILE *stream = stderr;
 
-    luaL_checkstack(L, 4, "trace_table");
+    luaL_checkstack(L, 4, "trace");
 
     if (cache_get(L, index) == LUA_TNIL) {
         lua_pop(L, 1); // cache_get
