@@ -1,7 +1,7 @@
 [
     {
         "directory": "/Users/marsgpl/projects/furiend",
-        "command": "clang -I./src -I./vendor/lua-5.4.7/src -I./vendor/yyjson-master/src -I./include/mac -I/opt/local/libexec/openssl3/include",
+        "command": "clang -I./src -I./vendor/lua-5.4.7/src -I./vendor/yyjson/src -I./include/mac -I/opt/local/libexec/openssl3/include",
         "file": ""
     }
 ]

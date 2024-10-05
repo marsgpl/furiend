@@ -5,7 +5,7 @@ CCFLAGS= -c -fPIC -O2 -std=c2x -march=native -fno-ident \
     -Wall -Wextra -Wshadow -Wstrict-aliasing -Werror -pedantic
 LDFLAGS= -shared -Wl,-z,max-page-size=0x1000
 INCS= -I/furiend/vendor/lua-5.4.7/src \
-    -I/furiend/vendor/yyjson-master/src \
+    -I/furiend/vendor/yyjson/src \
     -I/furiend/src
 LIBS= -L/furiend/include/vendor/ -lyyjson
 
@@ -20,6 +20,8 @@ $(NAME).so: $(NAME).o /furiend/src/furiend/lib.o
 .c.o:
 	$(CC) $(CCFLAGS) -o $@ $< $(INCS)
 
-$(NAME).o: $(NAME).c $(NAME).h /furiend/src/furiend/lib.h
+$(NAME).o: $(NAME).c $(NAME).h \
+    /furiend/src/furiend/lib.h \
+    /furiend/vendor/yyjson/src/yyjson.h
 
 .PHONY: build clean

@@ -38,15 +38,25 @@ cp src/luac /furiend/bin/
 
 ```sh
 mkdir -p /furiend/vendor && cd /furiend/vendor
-wget https://github.com/ibireme/yyjson/archive/refs/heads/master.zip
-mv master.zip yyjson-master.zip
-unzip yyjson-master.zip
-cd yyjson-master
+git clone https://github.com/marsgpl/yyjson.git -b yyjson_mut_obj_add_keyn_val
+cd yyjson
 mkdir build && cd build
 cmake ..
 cmake --build .
 mkdir -p /furiend/include/vendor
 cp libyyjson.a /furiend/include/vendor
+```
+
+## json perf
+
+```sh
+mkdir -p /furiend/vendor && cd /furiend/vendor
+git clone https://github.com/mpx/lua-cjson.git
+cd lua-cjson
+sed -i "s/_CFLAGS =/_CFLAGS = \-I\/furiend\/vendor\/lua-5.4.7\/src/" Makefile
+make
+cd /furiend
+lua test/json.perf.lua
 ```
 
 ## TODO

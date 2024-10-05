@@ -10,23 +10,6 @@
     lua_insert(L, -2); \
 }
 
-/* wait for pr https://github.com/ibireme/yyjson/issues/185
-#define yyjson_mut_obj_add_keyn_val(DOC, OBJ, KEY, KEY_LEN, VAL) { \
-    yyjson_mut_val *NEW_KEY = unsafe_yyjson_mut_val(DOC, 2); \
-    if (yyjson_likely(NEW_KEY)) { \
-        size_t LEN = unsafe_yyjson_get_len(OBJ); \
-        yyjson_mut_val *NEW_VAL = NEW_KEY + 1; \
-        bool noesc = unsafe_yyjson_is_str_noesc(KEY, KEY_LEN); \
-        NEW_KEY->tag = YYJSON_TYPE_STR; \
-        NEW_KEY->tag |= noesc ? YYJSON_SUBTYPE_NOESC : YYJSON_SUBTYPE_NONE; \
-        NEW_KEY->tag |= (uint64_t)KEY_LEN << YYJSON_TAG_BIT; \
-        NEW_KEY->uni.str = KEY; \
-        NEW_VAL = VAL; \
-        unsafe_yyjson_mut_obj_add(OBJ, NEW_KEY, NEW_VAL, LEN); \
-    } \
-}
-*/
-
 LUAMOD_API int luaopen_json(lua_State *L);
 
 int json_parse(lua_State *L);
