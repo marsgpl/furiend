@@ -68,7 +68,8 @@ lua test/json.perf.lua
 - http: ip6, keep-alive, parse response len, server, reuse string buffers,
     params: url, timeout, custom request headers, param: query, POST body,
     crt verification, more validations, reuse ssl, http 2+, gzip, quic,
-    prop: add_response_headline, headers normalization
+    prop: add_response_headline, headers normalization, multiple chunks,
+    transfer encoding len validation
 - cookie
 - dns: more types, ip6
 - simplify async boilerplate
@@ -80,3 +81,4 @@ lua test/json.perf.lua
 - posix threads
 - fork
 - review all libs
+- cjson stringify is faster than yyjson wrapper

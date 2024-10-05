@@ -39,7 +39,7 @@ local samples = {
     { {1}, "[1]" },
     { {[""]=1}, '{"":1}' },
     { {["\x00hi"]="\x01"}, '{"\\u0000hi":"\\u0001"}' },
-    { {["✅"]=1}, '{"✅":1}' },
+    { {["✅"]=1}, '{"\\u2705":1}' },
     { {["-3.4e+20"]=1}, '{"-3.4e+20":1}' },
     { {["3.4e-20"]=1}, '{"3.4e-20":1}' },
     {
@@ -76,7 +76,7 @@ local samples = {
     { "Hello", '"Hello"' },
     {
         "\xD8\xAC\xD9\x8A\xD8\xAF \xD8\xAC\xD8\xAF\xD9\x8B\xD8\xA7",
-        '"\xD8\xAC\xD9\x8A\xD8\xAF \xD8\xAC\xD8\xAF\xD9\x8B\xD8\xA7"',
+        '"\x5Cu062C\x5Cu064A\x5Cu062F \x5Cu062C\x5Cu062F\x5Cu064B\x5Cu0627"',
     },
     { "I\'m under\x00 the\nwater", '"I\'m under\\u0000 the\\nwater"' },
     {
@@ -94,8 +94,8 @@ local samples = {
     },
     { {["-3.4e+20"]=1}, '{"-3.4e+20":1}' },
     { {["3.4e-20"]=1}, '{"3.4e-20":1}' },
-    { "鳥", '"\xE9\xB3\xA5"' }, -- \u9ce5
-    { "\239\160\128", '"\xEF\xA0\x80"' }, -- \uF800
+    { "鳥", '"\\u9CE5"' },
+    { "\239\160\128", '"\\uF800"' },
     { {["-3.4e+20"]=1}, '{"-3.4e+20":1}' },
     { {["3.4e-20"]=1}, '{"3.4e-20":1}' },
     { {a=1}, '{"a":1}' },
@@ -208,7 +208,7 @@ local bad_json = {
 }
 
 return function()
-    for i, pair in ipairs(samples) do
+    for _, pair in ipairs(samples) do
         local value, string = pair[1], pair[2]
 
         trace(string, value)
@@ -226,7 +226,7 @@ return function()
         end
     end
 
-    for i, pair in ipairs(one_way_parse) do
+    for _, pair in ipairs(one_way_parse) do
         local string, value = pair[1], pair[2]
         trace(string, value)
         local _, parsed = assert(json.parse(string))
@@ -234,14 +234,14 @@ return function()
         assert(equal(value, parsed), "value != parsed")
     end
 
-    for i, value in ipairs(bad_input) do
+    for _, value in ipairs(bad_input) do
         trace(value)
         local result, stringified = json.stringify(value)
         trace(result, stringified)
         assert(not result, "failed to fail stringify")
     end
 
-    for i, string in ipairs(bad_json) do
+    for _, string in ipairs(bad_json) do
         trace(string)
         local result, parsed = json.parse(string)
         trace(result, parsed)

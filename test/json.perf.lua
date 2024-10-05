@@ -4,26 +4,25 @@ package.cpath = "/furiend/src/lua-lib/?/?.so;/furiend/vendor/lua-cjson/?.so"
 local perf = require "test.perf"
 local cjson = require "cjson"
 local json = require "json"
-local trace = require "trace"
 
 local string = [[
 {
     "glossary": {
         "title": "example glossary",
-		"GlossDiv": {
+        "GlossDiv": {
             "title": "S",
-			"GlossList": {
+            "GlossList": {
                 "GlossEntry": {
                     "ID": "SGML",
-					"SortAs": "SGML",
-					"GlossTerm": "Standard Generalized Markup Language",
-					"Acronym": "SGML",
-					"Abbrev": "ISO 8879:1986",
-					"GlossDef": {
+                    "SortAs": "SGML",
+                    "GlossTerm": "Standard Generalized Markup Language",
+                    "Acronym": "SGML",
+                    "Abbrev": "ISO 8879:1986",
+                    "GlossDef": {
                         "para": "A meta-markup language, used to create markup languages such as DocBook.",
-						"GlossSeeAlso": ["GML", "XML"]
+                        "GlossSeeAlso": ["GML", "XML"]
                     },
-					"GlossSee": "markup"
+                    "GlossSee": "markup"
                 }
             }
         }
@@ -39,25 +38,25 @@ local _, value = assert(json.parse(string))
 -- trace(cjson.decode(string))
 
 perf()
-    for i = 1, 250000 do
+    for _ = 1, 250000 do
         assert(json.stringify(value))
     end
-perf("stringify: furiend")
+perf("stringify: yyjson")
 
 perf()
-    for i = 1, 250000 do
+    for _ = 1, 250000 do
         assert(cjson.encode(value))
     end
 perf("stringify: cjson")
 
 perf()
-    for i = 1, 250000 do
+    for _ = 1, 250000 do
         assert(json.parse(string))
     end
-perf("parse: yyjson/furiend")
+perf("parse: yyjson")
 
 perf()
-    for i = 1, 250000 do
+    for _ = 1, 250000 do
         assert(cjson.decode(string))
     end
-perf("parse: cjson      ") -- align spaces
+perf("parse: cjson")

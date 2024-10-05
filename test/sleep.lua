@@ -3,7 +3,6 @@ local trace = require "trace"
 local sleep = require "sleep"
 local async = require "async"
 local wait = async.wait
-local pwait = async.pwait
 
 return function()
     perf()
@@ -16,8 +15,8 @@ return function()
     perf("sleep prepare")
 
     perf()
-        trace("t1:", pwait(t1))
-        trace("t2:", pwait(t2))
-        trace("t3:", pwait(t3))
+        trace("t1:", wait(t1))
+        trace("t2:", wait(t2))
+        trace("t3:", wait(t3))
     perf("sleep wait")
 end

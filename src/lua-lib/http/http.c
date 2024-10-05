@@ -148,7 +148,7 @@ static void http_parse_params(
         : lua_toboolean(L, idx + 2);
 
     params->method = luaL_optstring(L, idx + 3, HTTP_DEFAULT_METHOD);
-    params->host = luaL_checkstring(L, idx + 4);
+    params->host = luaL_optstring(L, idx + 4, "");
     params->ip4 = luaL_checkstring(L, idx + 5);
     params->path = luaL_optstring(L, idx + 6, HTTP_DEFAULT_PATH);
     params->timeout = luaL_optnumber(L, idx + 7, HTTP_DEFAULT_TIMEOUT);
@@ -164,7 +164,7 @@ static void http_check_params(lua_State *L, http_params *params) {
     size_t len;
 
     len = strlen(params->host);
-    if (!len || len > HTTP_HOST_MAX_LEN) {
+    if (len > HTTP_HOST_MAX_LEN) {
         luaL_error(L, "invalid len for host: %s; len: %d; max: %d",
             params->host, len, HTTP_HOST_MAX_LEN);
     }
@@ -188,21 +188,19 @@ static void http_build_headers(
     http_params *params
 ) {
     const char *ua = params->user_agent;
+    const char *host = params->host;
 
     int len = strlen(params->method)
         + strlen(" ") + strlen(params->path)
         + strlen(" ") + strlen(HTTP_VERSION)
-        + strlen(SEP)
-        + strlen("Host: ") + strlen(params->host)
         + strlen(SEP)
         + strlen(HTTP_HEADER_CONNECTION_CLOSE)
         + strlen(SEP)
         + strlen(SEP)
         + 1; // + nul for snprintf
 
-    if (ua[0]) {
-        len += strlen("User-Agent: ") + strlen(ua) + strlen(SEP);
-    }
+    if (host[0]) len += strlen("Host: ") + strlen(host) + strlen(SEP);
+    if (ua[0]) len += strlen("User-Agent: ") + strlen(ua) + strlen(SEP);
 
     if (len > HTTP_QUERY_HEADERS_MAX_LEN) {
         luaL_error(L, "request headers are too big; len: %d; max: %d",
@@ -227,15 +225,15 @@ static void http_build_headers(
     }
 
     PUSH("%s %s %s", params->method, params->path, HTTP_VERSION);
-    PUSH("Host: %s", params->host);
     PUSH(HTTP_HEADER_CONNECTION_CLOSE);
+    if (host[0]) PUSH("Host: %s", host);
     if (ua[0]) PUSH("User-Agent: %s", ua);
     PUSH(""); // to produce \r\n\r\n
 
     #undef PUSH
 
     if (len != 1) {
-        luaL_error(L, "request headers len calculated incorrectly");
+        luaL_error(L, "request headers len calculated incorrectly: %d", len);
     }
 }
 
@@ -294,95 +292,160 @@ static int http_request_continue(lua_State *L, int status, lua_KContext ctx) {
     return lua_yieldk(L, 0, 0, http_request_continue); // longjmp
 }
 
-static int http_request_finish(lua_State *L, ud_http_request *req) {
-    req->response[req->response_len] = '\0'; // extra byte was reserved
+static void parse_headline(http_headers_state *state, http_headline *headline) {
+    char *pos = memchr(state->line, '\r', state->rest_len);
 
-    char *ver = NULL;
-    int ver_len = 0;
-    int code = 0;
-    char *msg = NULL;
-    int msg_len = 0;
-
-    char *pos;
-    char *line = req->response;
-    int line_len;
-    int rest_len = req->response_len;
-
-    // HTTP/x.x CODE MESSAGE\r\n
-
-    pos = memchr(line, '\r', rest_len);
-
-    if (pos != NULL && *(pos + 1) == '\n') {
-        line_len = pos - line + 2; // +2 for \r\n
-        pos = memchr(line, ' ', line_len);
-
-        if (pos) {
-            // HTTP/1.1
-            ver = line;
-            ver_len = pos - line;
-
-            // 200
-            pos++;
-            while (*pos >= '0' && *pos <= '9') {
-                code = (code * 10) + (*pos - '0');
-                pos++;
-            }
-
-            // OK
-            msg = pos + 1; // skip 1 non-digit
-            msg_len = line_len - 2 - 1 - (pos - line);
-            if (msg_len < 0) msg_len = 0;
-        }
-
-        rest_len -= line_len;
-        line += line_len;
+    if (pos == NULL || *(pos + 1) != '\n') {
+        return;
     }
 
-    // version, code, message, headers, body, request?
-    lua_createtable(L, 0, 5 + req->show_request);
+    int line_len = pos - state->line + 2; // +2 for \r\n
+    pos = memchr(state->line, ' ', line_len);
 
-    lua_pushlstring(L, ver, ver_len);
-    lua_setfield(L, -2, "version");
+    if (pos) {
+        // HTTP/1.1
 
-    lua_pushinteger(L, code);
-    lua_setfield(L, -2, "code");
+        headline->ver = state->line;
+        headline->ver_len = pos - state->line;
 
-    lua_pushlstring(L, msg, msg_len);
-    lua_setfield(L, -2, "message");
+        // 200
 
-    lua_createtable(L, 0, HTTP_EXPECT_RESPONSE_HEADERS_N);
+        pos++;
+        while (*pos >= '0' && *pos <= '9') {
+            headline->code = (headline->code * 10) + (*pos - '0');
+            pos++;
+        }
 
+        // OK
+
+        headline->msg = pos + 1; // skip 1 non-digit
+        headline->msg_len = line_len - 2 - 1 - (pos - state->line);
+
+        if (headline->msg_len < 0) {
+            headline->msg_len = 0;
+        }
+    }
+
+    state->line += line_len;
+    state->rest_len -= line_len;
+}
+
+static void parse_headers(lua_State *L, http_headers_state *state) {
     while (1) {
-        pos = memchr(line, '\r', rest_len);
+        char *pos = memchr(state->line, '\r', state->rest_len);
 
         if (pos == NULL || *(pos + 1) != '\n') {
             break;
         }
 
-        line_len = pos - line + 2; // +2 for \r\n
-        rest_len -= line_len;
+        int line_len = pos - state->line + 2; // +2 for \r\n
+        state->rest_len -= line_len;
 
         if (line_len == 2) { // \r\n\r\n
-            break;
+            state->line += 2;
+            return; // end of headers
         }
 
-        pos = memchr(line, ':', line_len);
+        pos = memchr(state->line, ':', line_len);
 
         if (pos) {
-            lua_pushlstring(L, line, pos - line); // k
-            lua_pushlstring(L, pos + 2, line_len - (pos - line) - 2 - 2); // v
+            lua_pushlstring(L,
+                state->line,
+                pos - state->line); // k
+
+            lua_pushlstring(L,
+                pos + 2,
+                line_len - (pos - state->line) - 2 - 2); // v
+
+            if (!state->is_chunked
+                && !strcasecmp(lua_tostring(L, -2), "transfer-encoding")
+                && !strcasecmp(lua_tostring(L, -1), "chunked")
+            ) {
+                state->is_chunked = 1;
+            }
+
             lua_rawset(L, -3);
         } else {
-            lua_pushlstring(L, line, line_len - 2);
+            lua_pushlstring(L, state->line, line_len - 2);
             lua_setfield(L, -2, "");
         }
 
-        line += line_len;
+        state->line += line_len;
+    }
+}
+
+static void rechunk(ud_http_request *req, http_headers_state *state) {
+    char *pos = state->line;
+    char *end = memchr(state->line, '\r', state->rest_len);
+
+    if (!end) {
+        return;
+    }
+
+    state->ltrim = end - pos + 2;
+
+    int chunk_len = 0;
+    while (pos < end) {
+        int dec = hex_to_dec[(int)*pos];
+        chunk_len = (chunk_len * 16) + dec;
+        pos++;
+    }
+
+    if (chunk_len <= 0 || chunk_len > HTTP_CHUNK_MAX_LEN) {
+        return;
+    }
+
+    state->rtrim = req->response_len
+        - (state->line - req->response)
+        - chunk_len
+        - state->ltrim;
+}
+
+static int http_request_finish(lua_State *L, ud_http_request *req) {
+    req->response[req->response_len] = '\0'; // extra byte was reserved
+
+    http_headers_state state = {
+        .line = req->response,
+        .rest_len = req->response_len,
+        .is_chunked = 0,
+        .ltrim = 0,
+        .rtrim = 0,
+    };
+
+    http_headline headline = {0};
+
+    // HTTP/x.x CODE MESSAGE\r\n
+    parse_headline(&state, &headline);
+
+    // version, code, message, headers, body, request?
+    lua_createtable(L, 0, 5 + req->show_request);
+
+    lua_pushlstring(L, headline.ver, headline.ver_len);
+    lua_setfield(L, -2, "version");
+
+    lua_pushinteger(L, headline.code);
+    lua_setfield(L, -2, "code");
+
+    lua_pushlstring(L, headline.msg, headline.msg_len);
+    lua_setfield(L, -2, "message");
+
+    lua_createtable(L, 0, HTTP_EXPECT_RESPONSE_HEADERS_N);
+
+    if (state.line > req->response) { // headline ok
+        parse_headers(L, &state);
+
+        if (state.is_chunked) {
+            // HEX_LEN\r\nCONTENT\r\n0\r\n\r\n
+            // HEX_LEN\r\nCONTENT\r\nHEX_LEN\r\nCONTENT\r\n0\r\n\r\n
+            rechunk(req, &state);
+        }
     }
 
     lua_setfield(L, -2, "headers");
 
-    lua_pushlstring(L, req->response + req->response_len - rest_len, rest_len);
+    lua_pushlstring(L,
+        req->response + (state.line - req->response) + state.ltrim,
+        state.rest_len - state.ltrim - state.rtrim);
     lua_setfield(L, -2, "body");
 
     if (req->show_request) {

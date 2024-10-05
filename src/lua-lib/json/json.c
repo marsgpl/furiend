@@ -88,7 +88,8 @@ static int json_parse_value(lua_State *L, yyjson_val *value) {
     }
 }
 
-static int is_array(lua_State *L, int index) { // type is already LUA_TTABLE
+// type must be already LUA_TTABLE
+static inline int is_array(lua_State *L, int index) {
     int next_idx = 1;
 
     lua_pushnil(L);
@@ -104,7 +105,7 @@ static int is_array(lua_State *L, int index) { // type is already LUA_TTABLE
     return next_idx - 1; // return array len, 0 - not array
 }
 
-static yyjson_mut_val *json_stringify_table(
+static inline yyjson_mut_val *json_stringify_table(
     lua_State *L,
     yyjson_mut_doc *doc,
     int index,
@@ -163,7 +164,7 @@ static yyjson_mut_val *json_stringify_table(
     return obj;
 }
 
-static yyjson_mut_val *json_stringify_value(
+static inline yyjson_mut_val *json_stringify_value(
     lua_State *L,
     yyjson_mut_doc *doc,
     int index,
@@ -219,7 +220,9 @@ int json_stringify(lua_State *L) {
 
     yyjson_mut_doc_set_root(doc, value);
 
-    const char *json = yyjson_mut_write_opts(doc, 0, NULL, NULL, &err);
+    size_t json_len;
+    const char *json = yyjson_mut_write_opts(doc,
+        YYJSON_WRITE_ESCAPE_UNICODE, NULL, &json_len, &err);
 
     if (!json) {
         fail(L, "json.stringify failed: %s (%d)", err.msg, err.code);
@@ -228,7 +231,7 @@ int json_stringify(lua_State *L) {
     }
 
     lua_pushboolean(L, 1);
-    lua_pushstring(L, json);
+    lua_pushlstring(L, json, json_len);
 
     free((void *)json);
     yyjson_mut_doc_free(doc);

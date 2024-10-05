@@ -1,6 +1,7 @@
 #ifndef LUA_LIB_HTTP_H
 #define LUA_LIB_HTTP_H
 
+#include <strings.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <openssl/ssl.h>
@@ -38,6 +39,23 @@
 #define HTTP_PATH_MAX_LEN 2047
 #define HTTP_USER_AGENT_MAX_LEN 2047
 #define HTTP_QUERY_HEADERS_MAX_LEN 4096
+#define HTTP_CHUNK_MAX_LEN 1024 * 1024
+
+typedef struct {
+    char *line;
+    int rest_len;
+    int is_chunked;
+    int ltrim;
+    int rtrim;
+} http_headers_state;
+
+typedef struct {
+    char *ver;
+    int ver_len;
+    int code;
+    char *msg;
+    int msg_len;
+} http_headline;
 
 typedef struct {
     const char *method;
@@ -66,6 +84,24 @@ typedef struct {
     const char *ssl_cipher;
 } ud_http_request;
 
+static const int hex_to_dec[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,1,2,3,4,5,6,7,8,9,
+    0,0,0,0,0,0,0,
+    10,11,12,13,14,15,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,
+    10,11,12,13,14,15,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,
+};
+
 LUAMOD_API int luaopen_http(lua_State *L);
 
 int http_request(lua_State *L);
@@ -87,6 +123,9 @@ static int ssl_error(lua_State *L, const char *fn_name);
 static int ssl_error_ret(lua_State *L, const char *fn_name, SSL *ssl, int ret);
 static int ssl_error_verify(lua_State *L, long result);
 static inline void realloc_response_buf(lua_State *L, ud_http_request *req);
+static void parse_headline(http_headers_state *state, http_headline *headline);
+static void parse_headers(lua_State *L, http_headers_state *state);
+static void rechunk(ud_http_request *req, http_headers_state *state);
 
 static void http_parse_params(
     lua_State *L,

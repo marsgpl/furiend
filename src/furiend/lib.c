@@ -83,10 +83,18 @@ extern void luaF_print_string(lua_State *L, int index, FILE *stream) {
     for (size_t i = 0; i < len; ++i) {
         unsigned char c = str[i];
 
-        if (c < 32 || c == '"' || c == '\\' || c >= 127) {
-            fprintf(stream, "\\x%X%X", (c >> 4) % 16, c % 16);
-        } else {
-            putc(c, stream);
+        switch (c) {
+            case '\r': fputs("\\r", stream); break;
+            case '\n': fputs("\\n", stream); break;
+            case '\t': fputs("\\t", stream); break;
+            case '"': fputs("\\\"", stream); break;
+            case '\\': fputs("\\", stream); break;
+            default:
+                if (c < 32 || c >= 127) {
+                    fprintf(stream, "\\x%X%X", (c >> 4) % 16, c % 16);
+                } else {
+                    putc(c, stream);
+                }
         }
     }
 

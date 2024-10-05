@@ -3,7 +3,7 @@ local trace = require "trace"
 local http = require "http"
 local dns = require "dns"
 local async = require "async"
-local wait, pwait = async.wait, async.pwait
+local wait = async.wait
 
 return function()
     local host = "lua.org"
@@ -16,17 +16,20 @@ return function()
     perf("dns resolve")
 
     perf()
-        local req = http.request {
+        trace(wait(http.request {
+            host = host,
+            ip4 = ips[1],
+        }))
+    perf("http request")
+
+    perf()
+        trace(wait(http.request {
             https = true,
             https_verify_cert = false,
             host = host,
             ip4 = ips[1],
             user_agent = "Furiend/Test; Linux; Lua",
             show_request = true,
-        }
-    perf("http request prepare")
-
-    perf()
-        trace(pwait(req))
-    perf("http request duration")
+        }))
+    perf("https request")
 end

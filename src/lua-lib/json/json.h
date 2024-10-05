@@ -15,16 +15,16 @@ LUAMOD_API int luaopen_json(lua_State *L);
 int json_parse(lua_State *L);
 int json_stringify(lua_State *L);
 
-static int is_array(lua_State *L, int index);
+static inline int is_array(lua_State *L, int index);
 static int json_parse_value(lua_State *L, yyjson_val *value);
 
-static yyjson_mut_val *json_stringify_value(
+static inline yyjson_mut_val *json_stringify_value(
     lua_State *L,
     yyjson_mut_doc *doc,
     int index,
     int cache_index);
 
-static yyjson_mut_val *json_stringify_table(
+static inline yyjson_mut_val *json_stringify_table(
     lua_State *L,
     yyjson_mut_doc *doc,
     int index,

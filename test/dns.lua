@@ -2,7 +2,7 @@ local perf = require "test.perf"
 local trace = require "trace"
 local dns = require "dns"
 local async = require "async"
-local pwait = async.pwait
+local wait = async.wait
 
 -- 1.1.1.1
 -- 8.8.8.8
@@ -18,7 +18,7 @@ return function()
     perf("dns prepare")
 
     perf()
-        trace("google.com:", pwait(r1))
-        trace("cloudflare.com:", pwait(r2))
+        trace("google.com:", wait(r1))
+        trace("cloudflare.com:", wait(r2))
     perf("dns resolve")
 end
