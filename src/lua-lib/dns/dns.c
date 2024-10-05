@@ -363,14 +363,13 @@ static int resolve_start(lua_State *L) {
 
     int req_id = dns_pack(L, client, name, type, class);
 
-    if (lua_rawgeti(L, -1, req_id) != LUA_TNIL) {
+    if (lua_rawgeti(L, -1, req_id)) {
         luaL_error(L, "dns request id already exists: %d", req_id);
     }
 
     int tmt_fd = luaF_set_timeout(L, client->tmt);
 
-    if (
-        (!client->can_write) // socket is not ready or send buf is full
+    if ((!client->can_write) // socket is not ready or send buf is full
         || (!client->parallel && !client->can_send) // w8 for prev response
     ) {
         queue_push(L, client);

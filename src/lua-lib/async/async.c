@@ -9,9 +9,7 @@ int async_loop(lua_State *L) {
     luaF_need_args(L, 1, "loop");
     luaL_checktype(L, 1, LUA_TFUNCTION); // loop fn
 
-    int type = lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
-
-    if (type != LUA_TNIL) {
+    if (lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP)) {
         luaL_error(L, "only 1 loop is allowed; current: %p; ridx: %d",
             lua_topointer(L, -1),
             F_RIDX_LOOP);

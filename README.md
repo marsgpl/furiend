@@ -80,3 +80,4 @@ lua test/json.perf.lua
 - posix threads
 - fork
 - review all libs
+- json stringify: when putting string, check for space only once (predict max string size)
