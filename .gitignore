@@ -6,5 +6,5 @@
 *.so
 *.luac
 
-/provision/README.md
+.env
 /src/entourage
