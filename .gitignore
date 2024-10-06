@@ -5,4 +5,6 @@
 *.o
 *.so
 *.luac
+
+/provision/README.md
 /src/entourage

@@ -1,0 +1,29 @@
+#!/bin/sh
+
+function error {
+    if [ -z "$1" ]; then
+        echo "$(tput setaf 1)Error$(tput sgr0)" >&2
+    else
+        echo "$(tput setaf 1)Error:$(tput sgr0) $1" >&2
+    fi
+    exit 1
+}
+
+METHOD="$1"
+ENDPOINT="$2"
+PAYLOAD="$3"
+
+[ -z "$CF_ZONE_ID" ] && error "env CF_ZONE_ID is empty"
+[ -z "$CF_BEARER" ] && error "env CF_BEARER is empty"
+
+[ -z "$METHOD" ] && error "arg#1 METHOD is empty"
+[ -z "$ENDPOINT" ] && error "arg#2 ENDPOINT is empty"
+[ -z "$PAYLOAD" ] && error "arg#3 PAYLOAD is empty"
+
+CF_API_ROOT="https://api.cloudflare.com/client/v4"
+
+curl -X $METHOD "$CF_API_ROOT/zones/$CF_ZONE_ID/$ENDPOINT" \
+     -H "Authorization: Bearer $CF_BEARER" \
+     -H "Content-Type: application/json" \
+     --data "$PAYLOAD" || error "cloudflare api query failed"
+echo ""

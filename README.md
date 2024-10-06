@@ -32,6 +32,8 @@ make linux test
 mkdir -p /furiend/bin
 cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
+mkdir -p /furiend/include/vendor
+cp src/liblua.a /furiend/include/vendor
 ```
 
 ## yyjson

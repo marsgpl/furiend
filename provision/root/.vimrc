@@ -1,0 +1,9 @@
+syntax on
+set encoding=utf-8
+set tabstop=4
+set shiftwidth=4
+set softtabstop=4
+set smarttab
+set expandtab
+setglobal fileencoding=utf-8
+set mouse=

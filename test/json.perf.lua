@@ -37,26 +37,28 @@ local _, value = assert(json.parse(string))
 -- trace(json.parse(string))
 -- trace(cjson.decode(string))
 
+local reps = 25000
+
 perf()
-    for _ = 1, 250000 do
+    for _ = 1, reps do
         assert(json.stringify(value))
     end
 perf("stringify: yyjson")
 
 perf()
-    for _ = 1, 250000 do
+    for _ = 1, reps do
         assert(cjson.encode(value))
     end
 perf("stringify: cjson")
 
 perf()
-    for _ = 1, 250000 do
+    for _ = 1, reps do
         assert(json.parse(string))
     end
 perf("parse: yyjson")
 
 perf()
-    for _ = 1, 250000 do
+    for _ = 1, reps do
         assert(cjson.decode(string))
     end
 perf("parse: cjson")
