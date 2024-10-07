@@ -1,12 +1,12 @@
 #!/furiend/bin/lua
 
-package.path = "/furiend/?.lua;/furiend/?.luac"
-package.cpath = "/furiend/src/lua-lib/?/?.so"
+warn "@on"
+
+package.path = "/furiend/?.lua;/furiend/src/lua-lib/?.lua"
+package.cpath = "/furiend/src/lua-clib/?/?.so"
 
 local async = require "async"
 local loop = async.loop
-
-warn "@on"
 
 loop(function()
     require "test.sha2" ()
@@ -15,4 +15,5 @@ loop(function()
     require "test.sleep" ()
     require "test.dns" ()
     require "test.http" ()
+    require "test.json-perf" ()
 end)

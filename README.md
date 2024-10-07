@@ -32,8 +32,6 @@ make linux test
 mkdir -p /furiend/bin
 cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
-mkdir -p /furiend/include/vendor
-cp src/liblua.a /furiend/include/vendor
 ```
 
 ## yyjson
@@ -45,11 +43,9 @@ cd yyjson
 mkdir build && cd build
 cmake ..
 cmake --build .
-mkdir -p /furiend/include/vendor
-cp libyyjson.a /furiend/include/vendor
 ```
 
-## json perf
+## cjson
 
 ```sh
 mkdir -p /furiend/vendor && cd /furiend/vendor
@@ -57,8 +53,6 @@ git clone https://github.com/mpx/lua-cjson.git
 cd lua-cjson
 sed -i "s/_CFLAGS =/_CFLAGS = \-I\/furiend\/vendor\/lua-5.4.7\/src/" Makefile
 make
-cd /furiend
-lua test/json.perf.lua
 ```
 
 ## TODO
@@ -68,10 +62,9 @@ lua test/json.perf.lua
 - log
 - json: pass params to yyjson
 - http: ip6, keep-alive, parse response len, server, reuse string buffers,
-    params: url, timeout, custom request headers, param: query, POST body,
-    crt verification, more validations, reuse ssl, http 2+, gzip, quic,
-    prop: add_response_headline, headers normalization, multiple chunks,
-    transfer encoding len validation
+    params: url, timeout, param: query, crt verification, more validations,
+    reuse ssl, http 2+, gzip, quic, response headers normalization,
+    multiple chunks
 - cookie
 - dns: more types, ip6
 - simplify async boilerplate

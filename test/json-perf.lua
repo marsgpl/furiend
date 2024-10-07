@@ -1,5 +1,4 @@
-package.path = "/furiend/?.lua;/furiend/?.luac"
-package.cpath = "/furiend/src/lua-lib/?/?.so;/furiend/vendor/lua-cjson/?.so"
+package.cpath = "/furiend/src/lua-clib/?/?.so;/furiend/vendor/lua-cjson/?.so"
 
 local perf = require "test.perf"
 local cjson = require "cjson"
@@ -39,26 +38,28 @@ local value = json.parse(string)
 
 local reps = 250000
 
-perf()
-    for _ = 1, reps do
-        assert(json.stringify(value))
-    end
-perf("stringify: yyjson")
+return function()
+    perf()
+        for _ = 1, reps do
+            assert(json.stringify(value))
+        end
+    perf("stringify: yyjson")
 
-perf()
-    for _ = 1, reps do
-        assert(cjson.encode(value))
-    end
-perf("stringify: cjson")
+    perf()
+        for _ = 1, reps do
+            assert(cjson.encode(value))
+        end
+    perf("stringify: cjson")
 
-perf()
-    for _ = 1, reps do
-        assert(json.parse(string))
-    end
-perf("parse: yyjson")
+    perf()
+        for _ = 1, reps do
+            assert(json.parse(string))
+        end
+    perf("parse: yyjson")
 
-perf()
-    for _ = 1, reps do
-        assert(cjson.decode(string))
-    end
-perf("parse: cjson")
+    perf()
+        for _ = 1, reps do
+            assert(cjson.decode(string))
+        end
+    perf("parse: cjson")
+end

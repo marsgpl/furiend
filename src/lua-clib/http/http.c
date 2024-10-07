@@ -116,9 +116,10 @@ static int http_request_start(lua_State *L) {
         lua_error(L);
     }
 
-    lua_insert(L, 1);
-    lua_getfield(L, 2, "body");
-    lua_settop(L, 2); // req, body
+    lua_insert(L, 1); // config, ..., req -> req, config, ...
+    lua_settop(L, 2); // req, config
+
+    // keep config in the stack to prevent req->body gc
 
     return lua_yieldk(L, 0, 0, http_request_continue); // longjmp
 }
@@ -329,7 +330,7 @@ static int http_request_continue(lua_State *L, int status, lua_KContext ctx) {
         return http_request_finish(L, req);
     }
 
-    lua_settop(L, 2); // req, body
+    lua_settop(L, 2); // req, config
 
     return lua_yieldk(L, 0, 0, http_request_continue); // longjmp
 }
@@ -482,9 +483,21 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
 
     lua_setfield(L, -2, "headers");
 
-    lua_pushlstring(L,
-        req->response + (state.line - req->response) + state.ltrim,
-        state.rest_len - state.ltrim - state.rtrim);
+    const char *body = state.line + state.ltrim;
+    size_t body_len = state.rest_len - state.ltrim - state.rtrim;
+
+    int left_pad = body - req->response;
+    int right_pad = state.rtrim;
+    int total = left_pad + body_len + right_pad;
+
+    if (total != req->response_len) {
+        luaL_error(L, "chunk len doesn't fit in response len"
+            "; left pad (headers): %d; chunk len: %d; right pad: %d"
+            "; total: %d; response len: %d",
+            left_pad, body_len, right_pad, total, req->response_len);
+    }
+
+    lua_pushlstring(L, body, body_len);
     lua_setfield(L, -2, "body");
 
     if (req->show_request) {

@@ -44,7 +44,7 @@
 #define HTTP_HOST_MAX_LEN 255
 #define HTTP_QUERY_HEADERS_MAX_LEN 8192 // 8Kb
 #define HTTP_QUERY_BODY_MAX_LEN 1024 * 1024 * 16 // 16Mb
-#define HTTP_CHUNK_MAX_LEN 1024 * 1024
+#define HTTP_CHUNK_MAX_LEN 1024 * 1024 * 8 // 8Mb
 
 typedef struct {
     char *line;

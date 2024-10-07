@@ -7,7 +7,7 @@ LDFLAGS= -shared -Wl,-z,max-page-size=0x1000
 INCS= -I/furiend/vendor/lua-5.4.7/src \
     -I/furiend/vendor/yyjson/src \
     -I/furiend/src
-LIBS= -L/furiend/include/vendor/ -lyyjson
+LIBS= -L/furiend/vendor/yyjson/build -lyyjson
 
 build: $(NAME).so
 
