@@ -30,14 +30,14 @@ local string = [[
 }
 ]]
 
-local _, value = assert(json.parse(string))
+local value = json.parse(string)
 
 -- trace(json.stringify(value))
 -- trace(cjson.encode(value))
 -- trace(json.parse(string))
 -- trace(cjson.decode(string))
 
-local reps = 25000
+local reps = 250000
 
 perf()
     for _ = 1, reps do

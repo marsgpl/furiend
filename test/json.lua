@@ -213,8 +213,8 @@ return function()
 
         trace(string, value)
 
-        local _, parsed = assert(json.parse(string))
-        local _, stringified = assert(json.stringify(value))
+        local parsed = json.parse(string)
+        local stringified = json.stringify(value)
 
         trace(stringified, parsed)
         assert(equal(value, parsed), "value != parsed")
@@ -229,21 +229,21 @@ return function()
     for _, pair in ipairs(one_way_parse) do
         local string, value = pair[1], pair[2]
         trace(string, value)
-        local _, parsed = assert(json.parse(string))
+        local parsed = json.parse(string)
         trace(parsed)
         assert(equal(value, parsed), "value != parsed")
     end
 
     for _, value in ipairs(bad_input) do
         trace(value)
-        local result, stringified = json.stringify(value)
+        local result, stringified = pcall(json.stringify, value)
         trace(result, stringified)
         assert(not result, "failed to fail stringify")
     end
 
     for _, string in ipairs(bad_json) do
         trace(string)
-        local result, parsed = json.parse(string)
+        local result, parsed = pcall(json.parse, string)
         trace(result, parsed)
         assert(not result, "failed to fail parse")
     end

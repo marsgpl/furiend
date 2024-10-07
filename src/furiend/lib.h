@@ -92,6 +92,7 @@ typedef struct {
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 extern int get_socket_error_code(int fd);
+extern int uint_len(uint64_t num);
 
 extern void luaF_trace(lua_State *L, const char *label);
 extern void luaF_print_value(lua_State *L, int index, FILE *stream);

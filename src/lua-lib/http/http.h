@@ -17,6 +17,7 @@
 #define HTTP_DEFAULT_PATH "/"
 #define HTTP_DEFAULT_METHOD "GET"
 #define HTTP_DEFAULT_USER_AGENT "" // empty string means do not send it
+#define HTTP_DEFAULT_CONTENT_TYPE ""
 
 #define HTTP_REQ_STATE_CONNECTING 0
 #define HTTP_REQ_STATE_CONNECTING_TLS 1
@@ -28,7 +29,12 @@
 
 #define HTTP_VERSION "HTTP/1.1"
 #define SEP "\r\n"
-#define HTTP_HEADER_CONNECTION_CLOSE "Connection: close"
+#define HTTP_HEADER_HOST "Host"
+#define HTTP_HEADER_USER_AGENT "User-Agent"
+#define HTTP_HEADER_CONTENT_LENGTH "Content-Length"
+#define HTTP_HEADER_CONTENT_TYPE "Content-Type"
+#define HTTP_HEADER_CONNECTION "Connection"
+#define HTTP_HEADER_CONNECTION_CLOSE HTTP_HEADER_CONNECTION ": close"
 
 #define HTTP_RESPONSE_INITIAL_SIZE 8192
 #define HTTP_RESPONSE_MAX_SIZE 1024 * 1024 * 2 // 2 Mb
@@ -36,9 +42,8 @@
 #define HTTP_EXPECT_RESPONSE_HEADERS_N 16
 
 #define HTTP_HOST_MAX_LEN 255
-#define HTTP_PATH_MAX_LEN 2047
-#define HTTP_USER_AGENT_MAX_LEN 2047
-#define HTTP_QUERY_HEADERS_MAX_LEN 4096
+#define HTTP_QUERY_HEADERS_MAX_LEN 8192 // 8Kb
+#define HTTP_QUERY_BODY_MAX_LEN 1024 * 1024 * 16 // 16Mb
 #define HTTP_CHUNK_MAX_LEN 1024 * 1024
 
 typedef struct {
@@ -63,6 +68,7 @@ typedef struct {
     const char *ip4;
     const char *path;
     const char *user_agent;
+    const char *content_type;
     lua_Number timeout;
     int port;
 } http_params;
@@ -76,6 +82,10 @@ typedef struct {
     char *headers;
     int headers_len;
     int headers_len_sent;
+    int have_body;
+    const char *body;
+    size_t body_len;
+    size_t body_len_sent;
     char *response;
     int response_size;
     int response_len;
@@ -117,20 +127,24 @@ static void http_request_reading_tls(lua_State *L, ud_http_request *req);
 static void http_request_shutdown_tls(lua_State *L, ud_http_request *req);
 static void http_request_on_send_complete(lua_State *L, ud_http_request *req);
 static int http_request_finish(lua_State *L, ud_http_request *req);
-static void http_check_params(lua_State *L, http_params *params);
 static int ssl_warn_err_stack(lua_State *L);
 static int ssl_error(lua_State *L, const char *fn_name);
 static int ssl_error_ret(lua_State *L, const char *fn_name, SSL *ssl, int ret);
 static int ssl_error_verify(lua_State *L, long result);
-static inline void realloc_response_buf(lua_State *L, ud_http_request *req);
 static void parse_headline(http_headers_state *state, http_headline *headline);
 static void parse_headers(lua_State *L, http_headers_state *state);
 static void rechunk(ud_http_request *req, http_headers_state *state);
+static inline void realloc_response_buf(lua_State *L, ud_http_request *req);
+
+static void http_check_params(
+    lua_State *L,
+    ud_http_request *req,
+    http_params *params);
 
 static void http_parse_params(
     lua_State *L,
-    http_params *params,
     ud_http_request *req,
+    http_params *params,
     int params_idx);
 
 static void http_build_headers(

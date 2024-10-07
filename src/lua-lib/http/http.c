@@ -67,8 +67,8 @@ static int http_request_start(lua_State *L) {
     memset(req, 0, sizeof(ud_http_request));
 
     http_params params;
-    http_parse_params(L, &params, req, 1);
-    http_check_params(L, &params);
+    http_parse_params(L, req, &params, 1);
+    http_check_params(L, req, &params);
 
     int status;
 
@@ -117,15 +117,16 @@ static int http_request_start(lua_State *L) {
     }
 
     lua_insert(L, 1);
-    lua_settop(L, 1); // params are dead after this point
+    lua_getfield(L, 2, "body");
+    lua_settop(L, 2); // req, body
 
     return lua_yieldk(L, 0, 0, http_request_continue); // longjmp
 }
 
 static void http_parse_params(
     lua_State *L,
-    http_params *params,
     ud_http_request *req,
+    http_params *params,
     int params_idx
 ) {
     int idx = lua_gettop(L);
@@ -140,27 +141,43 @@ static void http_parse_params(
     lua_getfield(L, params_idx, "port");
     lua_getfield(L, params_idx, "user_agent");
     lua_getfield(L, params_idx, "show_request");
+    lua_getfield(L, params_idx, "body");
+    lua_getfield(L, params_idx, "content_type");
+
+    const char *method = luaL_optstring(L, idx + 3, HTTP_DEFAULT_METHOD);
+    unsigned char method0c = method[0];
 
     req->show_request = lua_toboolean(L, idx + 10);
     req->https = lua_toboolean(L, idx + 1);
     req->https_verify_cert = lua_isnil(L, idx + 2)
         ? HTTPS_VERIFY_CERT_DEFAULT
         : lua_toboolean(L, idx + 2);
+    req->have_body = (method0c == 'P' || method0c == 'p') && (
+        strcasecmp(method, "POST") == 0 ||
+        strcasecmp(method, "PUT") == 0 ||
+        strcasecmp(method, "PATCH") == 0);
+    req->body = luaL_optlstring(L, idx + 11, "", &(req->body_len));
 
-    params->method = luaL_optstring(L, idx + 3, HTTP_DEFAULT_METHOD);
+    params->method = method;
     params->host = luaL_optstring(L, idx + 4, "");
     params->ip4 = luaL_checkstring(L, idx + 5);
     params->path = luaL_optstring(L, idx + 6, HTTP_DEFAULT_PATH);
     params->timeout = luaL_optnumber(L, idx + 7, HTTP_DEFAULT_TIMEOUT);
+    params->user_agent = luaL_optstring(L, idx + 9, HTTP_DEFAULT_USER_AGENT);
+    params->content_type = luaL_optstring(L, idx + 12,
+        HTTP_DEFAULT_CONTENT_TYPE);
     params->port = luaL_optinteger(L, idx + 8, req->https
         ? HTTPS_DEFAULT_PORT
         : HTTP_DEFAULT_PORT);
-    params->user_agent = luaL_optstring(L, idx + 9, HTTP_DEFAULT_USER_AGENT);
 
     lua_settop(L, idx);
 }
 
-static void http_check_params(lua_State *L, http_params *params) {
+static void http_check_params(
+    lua_State *L,
+    ud_http_request *req,
+    http_params *params
+) {
     size_t len;
 
     len = strlen(params->host);
@@ -169,16 +186,15 @@ static void http_check_params(lua_State *L, http_params *params) {
             params->host, len, HTTP_HOST_MAX_LEN);
     }
 
-    len = strlen(params->path);
-    if (!len || len > HTTP_PATH_MAX_LEN) {
-        luaL_error(L, "invalid len for path: %s; len: %d; max: %d",
-            params->path, len, HTTP_PATH_MAX_LEN);
+    if (!req->have_body && req->body_len > 0) {
+        luaL_error(L, "specified http method does not support body"
+            "; method: %s; body len: %d", params->method, req->body_len);
     }
 
-    len = strlen(params->user_agent);
-    if (len > HTTP_USER_AGENT_MAX_LEN) {
-        luaL_error(L, "invalid len for user agent: %s; len: %d; max: %d",
-            params->user_agent, len, HTTP_USER_AGENT_MAX_LEN);
+    if (req->body_len > HTTP_QUERY_BODY_MAX_LEN) {
+        luaL_error(L, "body is too big; len: %d; max: %d",
+            req->body_len,
+            HTTP_QUERY_BODY_MAX_LEN);
     }
 }
 
@@ -187,10 +203,13 @@ static void http_build_headers(
     ud_http_request *req,
     http_params *params
 ) {
-    const char *ua = params->user_agent;
+    const char *method = params->method;
     const char *host = params->host;
+    const char *user_agent = params->user_agent;
+    const char *content_type = params->content_type;
+    int have_body = req->have_body;
 
-    int len = strlen(params->method)
+    int len = strlen(method)
         + strlen(" ") + strlen(params->path)
         + strlen(" ") + strlen(HTTP_VERSION)
         + strlen(SEP)
@@ -199,8 +218,29 @@ static void http_build_headers(
         + strlen(SEP)
         + 1; // + nul for snprintf
 
-    if (host[0]) len += strlen("Host: ") + strlen(host) + strlen(SEP);
-    if (ua[0]) len += strlen("User-Agent: ") + strlen(ua) + strlen(SEP);
+    if (host[0]) {
+        len += strlen(HTTP_HEADER_HOST ": ")
+            + strlen(host)
+            + strlen(SEP);
+    }
+
+    if (user_agent[0]) {
+        len += strlen(HTTP_HEADER_USER_AGENT ": ")
+            + strlen(user_agent)
+            + strlen(SEP);
+    }
+
+    if (content_type[0]) {
+        len += strlen(HTTP_HEADER_CONTENT_TYPE ": ")
+            + strlen(content_type)
+            + strlen(SEP);
+    }
+
+    if (have_body) {
+        len += strlen(HTTP_HEADER_CONTENT_LENGTH ": ")
+            + uint_len(req->body_len)
+            + strlen(SEP);
+    }
 
     if (len > HTTP_QUERY_HEADERS_MAX_LEN) {
         luaL_error(L, "request headers are too big; len: %d; max: %d",
@@ -210,7 +250,7 @@ static void http_build_headers(
     req->headers = malloc(len);
     req->headers_len = len - 1; // exclude nul
 
-    if (req->headers == NULL) {
+    if (!req->headers) {
         luaF_error_errno(L, "headers malloc failed; size: %d", len);
     }
 
@@ -224,10 +264,12 @@ static void http_build_headers(
         len -= r; \
     }
 
-    PUSH("%s %s %s", params->method, params->path, HTTP_VERSION);
+    PUSH("%s %s %s", method, params->path, HTTP_VERSION);
     PUSH(HTTP_HEADER_CONNECTION_CLOSE);
-    if (host[0]) PUSH("Host: %s", host);
-    if (ua[0]) PUSH("User-Agent: %s", ua);
+    if (host[0]) PUSH(HTTP_HEADER_HOST ": %s", host);
+    if (user_agent[0]) PUSH(HTTP_HEADER_USER_AGENT ": %s", user_agent);
+    if (content_type[0]) PUSH(HTTP_HEADER_CONTENT_TYPE ": %s", content_type);
+    if (have_body) PUSH(HTTP_HEADER_CONTENT_LENGTH ": %lu", req->body_len);
     PUSH(""); // to produce \r\n\r\n
 
     #undef PUSH
@@ -287,7 +329,7 @@ static int http_request_continue(lua_State *L, int status, lua_KContext ctx) {
         return http_request_finish(L, req);
     }
 
-    lua_settop(L, 1);
+    lua_settop(L, 2); // req, body
 
     return lua_yieldk(L, 0, 0, http_request_continue); // longjmp
 }
@@ -349,17 +391,14 @@ static void parse_headers(lua_State *L, http_headers_state *state) {
         pos = memchr(state->line, ':', line_len);
 
         if (pos) {
-            lua_pushlstring(L,
-                state->line,
-                pos - state->line); // k
+            int k_len = pos - state->line;
 
-            lua_pushlstring(L,
-                pos + 2,
-                line_len - (pos - state->line) - 2 - 2); // v
+            lua_pushlstring(L, state->line, k_len); // k
+            lua_pushlstring(L, pos + 2, line_len - k_len - 2 - 2); // v
 
             if (!state->is_chunked
-                && !strcasecmp(lua_tostring(L, -2), "transfer-encoding")
-                && !strcasecmp(lua_tostring(L, -1), "chunked")
+                && strcasecmp(lua_tostring(L, -2), "transfer-encoding") == 0
+                && strcasecmp(lua_tostring(L, -1), "chunked") == 0
             ) {
                 state->is_chunked = 1;
             }
@@ -451,6 +490,8 @@ static int http_request_finish(lua_State *L, ud_http_request *req) {
     if (req->show_request) {
         lua_pushlstring(L, req->headers, req->headers_len);
         lua_setfield(L, -2, "request");
+        lua_pushlstring(L, req->body, req->body_len);
+        lua_setfield(L, -2, "request_body");
     }
 
     // disconnect
@@ -483,10 +524,10 @@ static void http_request_sending_plain(lua_State *L, ud_http_request *req) {
             MSG_NOSIGNAL);
 
         if (sent == 0) {
-            luaL_error(L, "send sent 0");
+            luaL_error(L, "headers: send sent 0");
         } else if (sent == -1) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                luaF_error_errno(L, "send failed; len: %d; sent: %d",
+                luaF_error_errno(L, "headers: send failed; len: %d; sent: %d",
                     req->headers_len - req->headers_len_sent,
                     sent);
             }
@@ -495,6 +536,27 @@ static void http_request_sending_plain(lua_State *L, ud_http_request *req) {
         }
 
         req->headers_len_sent += sent;
+    }
+
+    while (req->have_body && req->body_len_sent < req->body_len) {
+        ssize_t sent = send(req->fd,
+            req->body + req->body_len_sent,
+            req->body_len - req->body_len_sent,
+            MSG_NOSIGNAL);
+
+        if (sent == 0) {
+            luaL_error(L, "body: send sent 0");
+        } else if (sent == -1) {
+            if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                luaF_error_errno(L, "body: send failed; len: %d; sent: %d",
+                    req->body_len - req->body_len_sent,
+                    sent);
+            }
+
+            return; // try again later
+        }
+
+        req->body_len_sent += sent;
     }
 
     http_request_on_send_complete(L, req);
@@ -510,18 +572,38 @@ static void http_request_sending_tls(lua_State *L, ud_http_request *req) {
             req->headers_len - req->headers_len_sent);
 
         if (sent == 0) {
-            ssl_error_ret(L, "SSL_write", req->ssl, sent);
+            ssl_error_ret(L, "SSL_write headers 0", req->ssl, sent);
         } else if (sent < 0) {
             int code = SSL_get_error(req->ssl, sent);
 
             if (code != SSL_ERROR_WANT_READ && code != SSL_ERROR_WANT_WRITE) {
-                ssl_error_ret(L, "SSL_write", req->ssl, sent);
+                ssl_error_ret(L, "SSL_write headers", req->ssl, sent);
             }
 
             return; // try again later
         }
 
         req->headers_len_sent += sent;
+    }
+
+    while (req->body_len_sent < req->body_len) {
+        int sent = SSL_write(req->ssl,
+            req->body + req->body_len_sent,
+            req->body_len - req->body_len_sent);
+
+        if (sent == 0) {
+            ssl_error_ret(L, "SSL_write body 0", req->ssl, sent);
+        } else if (sent < 0) {
+            int code = SSL_get_error(req->ssl, sent);
+
+            if (code != SSL_ERROR_WANT_READ && code != SSL_ERROR_WANT_WRITE) {
+                ssl_error_ret(L, "SSL_write body", req->ssl, sent);
+            }
+
+            return; // try again later
+        }
+
+        req->body_len_sent += sent;
     }
 
     http_request_on_send_complete(L, req);
