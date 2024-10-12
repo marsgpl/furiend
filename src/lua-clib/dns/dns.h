@@ -4,7 +4,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
-#include <furiend/lib.h>
+#include <furiend/shared.h>
 
 #define MT_DNS_CLIENT "dns.client*"
 
@@ -79,26 +79,36 @@ typedef struct {
 
 LUAMOD_API int luaopen_dns(lua_State *L);
 
+int dns_resolve(lua_State *L);
+
+static int dns_resolve_start(lua_State *L);
+static int dns_resolve_continue(lua_State *L, int status, lua_KContext ctx);
+
 static int dns_client(lua_State *L);
 static int dns_client_gc(lua_State *L);
-static int dns_client_router(lua_State *L);
-static int router_continue(lua_State *L, int status, lua_KContext ctx);
-static int router_process_event(lua_State *L);
-static void router_read(lua_State *L, ud_dns_client *client);
+
+static int dns_router(lua_State *L);
+static int dns_router_continue(lua_State *L, int status, lua_KContext ctx);
+static int dns_router_process_event(lua_State *L);
+static void dns_router_read(lua_State *L, ud_dns_client *client);
+
+static void process_send_queue(lua_State *L, ud_dns_client *client);
 static void unsub_req_id(lua_State *L, int client_idx, int req_id);
 static void unqueue_req_id(lua_State *L, int client_idx, int req_id);
-static void process_send_queue(lua_State *L, ud_dns_client *client);
 static void queue_push(lua_State *L, ud_dns_client *client);
-int dns_client_resolve(lua_State *L);
-static int resolve_start(lua_State *L);
-static int resolve_continue(lua_State *L, int status, lua_KContext ctx);
+static void shift_send_queue(
+    lua_State *L,
+    ud_dns_client *client,
+    int queue_idx,
+    int sent_n);
+
 static void header_error(lua_State *L, dns_header_t *header, const char *msg);
 static int parse_header(lua_State *L, char **buf, int *len);
 static const char *parse_name(lua_State *L, char **buf, int *len);
 static void parse_push_answer(lua_State *L, char **buf, int *len, int index);
-static const char *opcode_label(int opcode);
-static const char *rcode_label(int opcode);
-static int dns_unpack(lua_State *L, ud_dns_client *client);
+
+static const char *dns_opcode_label(int opcode);
+static const char *dns_rcode_label(int opcode);
 
 static int dns_pack(
     lua_State *L,
@@ -107,14 +117,10 @@ static int dns_pack(
     int type,
     int class);
 
-static void shift_send_queue(
-    lua_State *L,
-    ud_dns_client *client,
-    int queue_idx,
-    int sent_n);
+static int dns_unpack(lua_State *L, ud_dns_client *client);
 
 static const luaL_Reg dns_client_index[] = {
-    { "resolve", dns_client_resolve },
+    { "resolve", dns_resolve },
     { NULL, NULL }
 };
 

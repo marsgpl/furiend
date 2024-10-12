@@ -5,6 +5,35 @@ LUAMOD_API int luaopen_sha2(lua_State *L) {
     return 1;
 }
 
+int sha512(lua_State *L) {
+    luaF_need_args(L, 1, "sha512");
+    luaL_checktype(L, 1, LUA_TSTRING); // phrase to hash
+
+    size_t len;
+    const char *input = lua_tolstring(L, 1, &len);
+
+    if (unlikely(len > 18446744073709551615ULL / 8)) {
+        luaL_error(L, "input is too long");
+    }
+
+    static uint64_t hash[8];
+    static char hex[128 + 1]; // 1 for sprintf nul byte
+
+    int is_ok = sha512_hash((const uint8_t *)input, len, hash);
+
+    if (unlikely(!is_ok)) {
+        luaF_error_errno(L, "sha512 calloc failed");
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        sprintf(hex + i * 16, "%016" PRIx64, hash[i]);
+    }
+
+    lua_pushlstring(L, hex, 128);
+
+    return 1;
+}
+
 static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash) {
     // padding
 
@@ -15,7 +44,7 @@ static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash) {
 
     char *msg = calloc(msg_len, 1); // zerofilled
 
-    if (msg == NULL) {
+    if (unlikely(msg == NULL)) {
         return 0; // fail
     }
 
@@ -96,33 +125,4 @@ static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash) {
     free(msg);
 
     return 1; // ok
-}
-
-int sha512(lua_State *L) {
-    luaF_need_args(L, 1, "sha512");
-    luaL_checktype(L, 1, LUA_TSTRING); // phrase to hash
-
-    size_t len;
-    const char *input = lua_tolstring(L, 1, &len);
-
-    if (len > 18446744073709551615ULL / 8) {
-        luaL_error(L, "input is too long");
-    }
-
-    static uint64_t hash[8];
-    static char hex[128 + 1]; // 1 for sprintf nul byte
-
-    int is_ok = sha512_hash((const uint8_t *)input, len, hash);
-
-    if (!is_ok) {
-        luaF_error_errno(L, "sha512 calloc failed");
-    }
-
-    for (int i = 0; i < 8; ++i) {
-        sprintf(hex + i * 16, "%016" PRIx64, hash[i]);
-    }
-
-    lua_pushlstring(L, hex, 128);
-
-    return 1;
 }

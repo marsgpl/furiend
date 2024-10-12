@@ -10,15 +10,24 @@ local wait = async.wait
 -- 2001:4860:4860::8888
 -- 2001:4860:4860::8844
 
+local names = {
+    "cloudflare.com",
+    "google.com",
+    "lua.org",
+}
+
 return function()
     perf()
-        local client = dns.client { ip4 = "1.1.1.1" }
-        local r1 = client:resolve { name = "cloudflare.com" }
-        local r2 = client:resolve { name = "google.com" }
+        local client = dns.client { ip4 = "1.1.1.1", parallel = true }
+        local requests = {}
+        for _, name in ipairs(names) do
+            requests[name] = client:resolve { name = name }
+        end
     perf("dns prepare")
 
     perf()
-        trace("google.com:", wait(r1))
-        trace("cloudflare.com:", wait(r2))
+        for name, request in pairs(requests) do
+            trace(name, wait(request))
+        end
     perf("dns resolve")
 end

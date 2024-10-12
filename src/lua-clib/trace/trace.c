@@ -42,7 +42,7 @@ static void trace_value(lua_State *L, int index, int depth, int mode) {
         }
     }
 
-    luaF_print_value(L, index, stream);
+    luaF_print_value(L, stream, index);
 
     if (type == LUA_TSTRING) {
         fprintf(stream, RESET);

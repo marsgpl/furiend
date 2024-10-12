@@ -1,10 +1,11 @@
+LUA_SRC= /furiend/vendor/lua-5.4.7/src
 CC= gcc
 LD= gcc
-CCFLAGS= -c -O2 -std=c2x -march=native -fno-ident \
+CCFLAGS= -c -fPIC -O2 -std=c2x -march=native -fno-ident \
     -Wall -Wextra -Wshadow -Wstrict-aliasing -Werror -pedantic
-INCS= -I/furiend/vendor/lua-5.4.7/src
+INCS= -I$(LUA_SRC)
 
-lib: lib.o
+shared: shared.o
 
 clean:
 	rm -f *.o
@@ -12,6 +13,6 @@ clean:
 .c.o:
 	$(CC) $(CCFLAGS) -fPIC -o $@ $< $(INCS)
 
-lib.o: lib.c lib.h
+shared.o: shared.c shared.h $(LUA_SRC)/lauxlib.h
 
-.PHONY: lib clean
+.PHONY: shared clean

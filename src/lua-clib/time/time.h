@@ -1,7 +1,7 @@
 #ifndef LUA_LIB_TIME_H
 #define LUA_LIB_TIME_H
 
-#include <furiend/lib.h>
+#include <furiend/shared.h>
 
 LUAMOD_API int luaopen_time(lua_State *L);
 

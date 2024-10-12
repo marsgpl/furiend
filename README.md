@@ -38,7 +38,7 @@ cp src/luac /furiend/bin/
 
 ```sh
 mkdir -p /furiend/vendor && cd /furiend/vendor
-git clone https://github.com/marsgpl/yyjson.git -b yyjson_mut_obj_add_keyn_val
+git clone https://github.com/ibireme/yyjson.git
 cd yyjson
 mkdir build && cd build
 cmake ..
@@ -57,23 +57,38 @@ make
 
 ## TODO
 
+- http: server
+    - new lua thread on every request (pool? prob not)
+    - nobody subscribes to these threads but router tracks them
+    - wait for callback finish (callback can yield)
+- tgwh + validate secret key
+- provision fe2 ssh tunnel to develop locally
 - redis
+- http: crt verification
 - url
-- log
-- json: pass params to yyjson
-- http: ip6, keep-alive, parse response len, server, reuse string buffers,
-    params: url, timeout, param: query, crt verification, more validations,
-    reuse ssl, http 2+, gzip, quic, response headers normalization,
-    multiple chunks
+- http: params: url, query
+- tgbot: hook custom crt + static ip
+- http: timeout
+- http: application/x-www-form-urlencoded
+- http: multipart/form-data
+- http: gzip
+- http: parse response len to preallocate buf
+- http: buffer pool to reuse
+- http: ip6
+- http: keep-alive
+- http: more validations
+- http: reuse ssl
+- http: multiple chunks
+- http: headers normalization
 - cookie
-- dns: more types, ip6
+- dns: more types
+- dns: ip6
 - simplify async boilerplate
-- fs: file, dir, stat
-- string utils: tcp stream packet separation
+- fs: file
+- fs: dir
+- fs: stat
+- tcp stream packet separation
 - socket
 - epoll
-- sandbox
-- posix threads
-- fork
-- review all libs
-- cjson stringify is faster than yyjson wrapper
+- review libs
+- fe2 ci (build, pack, deploy)

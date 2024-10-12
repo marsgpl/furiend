@@ -5,7 +5,7 @@ local equal = require "equal"
 local circular_obj = {}
 circular_obj.self = circular_obj
 
-local circular_arr = {1,2}
+local circular_arr = {1, 2}
 table.insert(circular_arr, circular_arr)
 
 local samples = {

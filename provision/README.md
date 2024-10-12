@@ -1,21 +1,20 @@
 # Füriend - provision
 
-## Digitalocean - Entourage #2
+## Digitalocean - Furiend Entourage #2 - fe2
 
 FRA, Alma 9, Basic/Regular, 4/mo, ipv6, PTR: $FE2_HOST
 
 ```sh
-cd provision
-. ./.env
+. provision/.env
 
 open "https://dash.cloudflare.com/$CF_ACCOUNT_ID/$CF_EMAIL/dns/records"
 open "http://$FE2_IP4"
 open "https://$FE2_HOST"
 
-rsync -i ~/.ssh/id_rsa -rv etc furiend root usr root@$FE2_IP4:/
+rsync -i ~/.ssh/id_rsa -rv provision/fe2/* root@$FE2_IP4:/
 ssh -i ~/.ssh/id_rsa root@$FE2_IP4
 
-rsync -e 'ssh -p 2' -rv etc furiend root usr root@$FE2_IP4:/
+rsync -e 'ssh -p 2' -rv provision/fe2/* root@$FE2_IP4:/
 ssh -p 2 -o SendEnv="FE2_* CF_*" root@$FE2_IP4
 
 unlink /etc/motd.d/cockpit

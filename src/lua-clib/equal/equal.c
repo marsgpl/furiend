@@ -5,6 +5,18 @@ LUAMOD_API int luaopen_equal(lua_State *L) {
     return 1;
 }
 
+static int equal(lua_State *L) {
+    luaF_need_args(L, 2, "equal");
+
+    if (lua_type(L, 1) == LUA_TTABLE && lua_type(L, 2) == LUA_TTABLE) {
+        lua_createtable(L, 0, 2);
+    }
+
+    lua_pushboolean(L, is_equal(L, 1, 2, 3));
+
+    return 1;
+}
+
 static int is_equal(lua_State *L, int a_idx, int b_idx, int cache_idx) {
     int a_type = lua_type(L, a_idx);
     int b_type = lua_type(L, b_idx);
@@ -103,16 +115,4 @@ static int is_equal(lua_State *L, int a_idx, int b_idx, int cache_idx) {
             return luaL_error(L, "unknown type: %s (%d)",
                 lua_typename(L, a_type), a_type);
     }
-}
-
-static int equal(lua_State *L) {
-    luaF_need_args(L, 2, "equal");
-
-    if (lua_type(L, 1) == LUA_TTABLE && lua_type(L, 2) == LUA_TTABLE) {
-        lua_createtable(L, 0, 2);
-    }
-
-    lua_pushboolean(L, is_equal(L, 1, 2, 3));
-
-    return 1;
 }

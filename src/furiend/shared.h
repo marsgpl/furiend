@@ -1,5 +1,5 @@
-#ifndef FURIEND_LIB_H
-#define FURIEND_LIB_H
+#ifndef FURIEND_SHARED_H
+#define FURIEND_SHARED_H
 
 #define _POSIX_C_SOURCE 199309L // CLOCK_MONOTONIC
 #define _GNU_SOURCE // clock_gettime
@@ -14,9 +14,6 @@
 #include <sys/timerfd.h>
 #include <lauxlib.h>
 
-#define F_DEBUG_SEP "-------------------------------------------------------\n"
-#define F_DEBUG_STR_MAX_LEN 1024
-#define F_ERROR_NEW_UD "lua_newuserdatauv failed; mt: %s; user values: %d"
 #define F_MT_LOOP "loop*"
 
 // when loop resumes fd sub: fd, emask
@@ -31,21 +28,17 @@
 #define F_RIDX_LOOP_T_SUBS 1003 // t_subs[thread] = { sub1, sub2, ... }
 
 #define F_GETSOCKOPT_FAILED -1 // see get_socket_error_code
+#define F_ERROR_NEW_UD "lua_newuserdatauv failed; mt: %s; user values: %d"
+
+#define inline __inline__
+#define likely(expr) __builtin_expect(!!(expr), 1)
+#define unlikely(expr) __builtin_expect(!!(expr), 0)
 
 typedef struct {
     int fd;
 } ud_loop;
 
-#define luaF_print_time(L, label) { \
-    struct timespec ts; \
-    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) { \
-        luaF_error_errno(L, "clock_gettime failed"); \
-    } \
-    printf("%s: %f\n", label, ts.tv_sec + ts.tv_nsec * 1e-9); \
-}
-
 #define luaF_warning(L, msg, ...) { \
-    luaL_checkstack(L, 1, "warning"); \
     lua_pushfstring(L, msg __VA_OPT__(,) __VA_ARGS__); \
     lua_warning(L, lua_tostring(L, -1), 0); \
     lua_pop(L, 1); \
@@ -54,17 +47,12 @@ typedef struct {
 #define luaF_warning_errno(L, msg, ...) \
     luaF_warning(L, msg "; errno: %s (%d)" \
         __VA_OPT__(,) __VA_ARGS__, \
-        strerror(errno), \
-        errno)
+        strerror(errno), errno)
 
 #define luaF_error_errno(L, msg, ...) \
     luaL_error(L, msg "; errno: %s (%d)" \
         __VA_OPT__(,) __VA_ARGS__, \
-        strerror(errno), \
-        errno) \
-
-#define luaF_push_error_errno(L, cause) \
-    lua_pushfstring(L, "%s; errno: %s (%d)", cause, strerror(errno), errno)
+        strerror(errno), errno) \
 
 #define luaF_set_kv_int(L, table_idx, key, value) { \
     lua_pushinteger(L, value); \
@@ -88,30 +76,22 @@ typedef struct {
     (emask & EPOLLRDHUP) ? "connection read/write shut down (EPOLLRDHUP)" : \
     "epoll event mask did not indicate any errors")
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
+int get_socket_error_code(int fd);
 
-extern int get_socket_error_code(int fd);
-extern int uint_len(uint64_t num);
-
-extern void luaF_trace(lua_State *L, const char *label);
-extern void luaF_print_value(lua_State *L, int index, FILE *stream);
-extern void luaF_print_string(lua_State *L, int index, FILE *stream);
-extern void luaF_close_or_warning(lua_State *L, int fd);
-extern void luaF_need_args(lua_State *L, int need_args_n, const char *label);
-extern int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx);
-extern int luaF_set_timeout(lua_State *L, lua_Number duration_s);
-extern int luaF_error_socket(lua_State *L, int fd, const char *cause);
-extern lua_State *luaF_new_thread_or_error(lua_State *L);
-extern const char *luaF_status_label(int status);
-
-extern void luaF_push_error_socket(
-    lua_State *L,
-    int fd,
-    const char *cause,
-    int socket_error_code);
-
-extern void luaF_loop_notify_t_subs(
+void luaF_print_time(lua_State *L, FILE *stream);
+void luaF_print_value(lua_State *L, FILE *stream, int index);
+void luaF_print_string(lua_State *L, FILE *stream, int index);
+void luaF_trace(lua_State *L, const char *label);
+void luaF_need_args(lua_State *L, int need_args_n, const char *label);
+void luaF_close_or_warning(lua_State *L, int fd);
+int luaF_set_timeout(lua_State *L, lua_Number duration_s);
+void luaF_push_error_socket(lua_State *L, int fd, const char *cause, int code);
+int luaF_error_socket(lua_State *L, int fd, const char *cause);
+lua_State *luaF_new_thread_or_error(lua_State *L);
+const char *luaF_status_label(int status);
+int luaF_loop_watch(lua_State *L);
+int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx);
+void luaF_loop_notify_t_subs(
     lua_State *L,
     lua_State *T,
     int t_subs_idx,

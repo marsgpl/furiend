@@ -2,7 +2,8 @@
     "diagnostics.globals": [],
     "runtime": {
         "path": [
-            "/Users/marsgpl/projects/furiend/?.lua"
+            "/Users/marsgpl/projects/furiend/?.lua",
+            "/Users/marsgpl/projects/furiend/src/lua-lib/?.lua"
         ],
         "pathStrict": true
     }

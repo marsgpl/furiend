@@ -1,7 +1,7 @@
 #ifndef LUA_LIB_EQUAL_H
 #define LUA_LIB_EQUAL_H
 
-#include <furiend/lib.h>
+#include <furiend/shared.h>
 
 LUAMOD_API int luaopen_equal(lua_State *L);
 

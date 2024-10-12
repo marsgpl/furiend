@@ -1,7 +1,7 @@
 #ifndef LUA_LIB_TRACE_H
 #define LUA_LIB_TRACE_H
 
-#include <furiend/lib.h>
+#include <furiend/shared.h>
 
 #define MODE_VARIABLE 1
 #define MODE_TABLE_KEY 2

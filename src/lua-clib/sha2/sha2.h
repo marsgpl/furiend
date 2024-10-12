@@ -4,7 +4,7 @@
 // https://en.wikipedia.org/wiki/SHA-2
 
 #include <inttypes.h>
-#include <furiend/lib.h>
+#include <furiend/shared.h>
 
 #define ROTR(x, n) (((x) >> (n)) | ((x) << (64 - (n))))
 #define SUM0(a) (ROTR(a, 28) ^ ROTR(a, 34) ^ ROTR(a, 39))
@@ -74,6 +74,7 @@ static const uint64_t IHV[8] = {
 LUAMOD_API int luaopen_sha2(lua_State *L);
 
 int sha512(lua_State *L);
+
 static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash);
 
 static const luaL_Reg sha2_index[] = {
