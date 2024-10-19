@@ -1,61 +1,103 @@
 #include "shared.h"
 
-static const int hex_to_dec[256] = {
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
-    -1,-1,-1,-1,-1,-1,-1,
-    10, 11, 12, 13, 14, 15,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    10, 11, 12, 13, 14, 15,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,
-};
+// GET / HTTP/1.1\r\n
+void parse_req_headline(headers_parser_state *state, req_headline *hline) {
+    char *line = state->line;
+    char *pos = memchr(line, '\r', state->rest_len);
 
-int parse_hex(const char *pos, const char *end) {
-    int result = 0;
-
-    while (pos < end) {
-        int dec = hex_to_dec[*(unsigned char *)pos];
-
-        if (unlikely(dec == -1)) {
-            return -1;
-        }
-
-        result = (result * 16) + dec;
-        pos++;
+    if (unlikely(!pos || *(pos + 1) != '\n')) {
+        return; // no headline
     }
 
-    return result;
+    int line_len = pos - line;
+    pos = memchr(line, ' ', line_len);
+
+    if (likely(pos != NULL)) {
+        hline->method = line;
+        hline->method_len = pos - line;
+        hline->path = pos + 1;
+        pos = memchr(pos + 1, ' ', line_len - (pos + 1 - line));
+
+        if (likely(pos != NULL)) {
+            hline->path_len = pos - hline->path;
+            hline->ver = pos + 1;
+            int len = line_len - (pos + 1 - line);
+            hline->ver_len = unlikely(len < 0) ? 0 : len;
+        }
+    }
+
+    state->line += line_len + 2; // +2 for \r\n
+    state->rest_len -= line_len + 2; // +2 for \r\n
 }
 
-int uint_len(uint64_t num) {
-    if (num < 10ULL) return 1;
-    if (num < 100ULL) return 2;
-    if (num < 1000ULL) return 3;
-    if (num < 10000ULL) return 4;
-    if (num < 100000ULL) return 5;
-    if (num < 1000000ULL) return 6;
-    if (num < 10000000ULL) return 7;
-    if (num < 100000000ULL) return 8;
-    if (num < 1000000000ULL) return 9;
-    if (num < 10000000000ULL) return 10;
-    if (num < 100000000000ULL) return 11;
-    if (num < 1000000000000ULL) return 12;
-    if (num < 10000000000000ULL) return 13;
-    if (num < 100000000000000ULL) return 14;
-    if (num < 1000000000000000ULL) return 15;
-    if (num < 10000000000000000ULL) return 16;
-    if (num < 100000000000000000ULL) return 17;
-    if (num < 1000000000000000000ULL) return 18;
-    if (num < 10000000000000000000ULL) return 19;
-    return 20; // max: 18446744073709551615ULL
+// HTTP/1.1 200 OK\r\n
+void parse_res_headline(headers_parser_state *state, res_headline *hline) {
+    char *line = state->line;
+    char *pos = memchr(line, '\r', state->rest_len);
+
+    if (unlikely(!pos || *(pos + 1) != '\n')) {
+        return; // no headline
+    }
+
+    int line_len = pos - line;
+    pos = memchr(line, ' ', line_len);
+
+    if (likely(pos != NULL)) {
+        hline->ver = line;
+        hline->ver_len = pos - line;
+        pos++;
+        hline->code = parse_dec(&pos);
+        hline->msg = pos + 1;
+        int len = line_len - (pos + 1 - line);
+        hline->msg_len = unlikely(len < 0) ? 0 : len;
+    }
+
+    state->line += line_len + 2; // +2 for \r\n
+    state->rest_len -= line_len + 2; // +2 for \r\n
+}
+
+void parse_headers(lua_State *L, headers_parser_state *state) {
+    while (1) {
+        char *pos = memchr(state->line, '\r', state->rest_len);
+
+        if (unlikely(!pos || *(pos + 1) != '\n')) {
+            break;
+        }
+
+        int line_len = pos - state->line + 2; // +2 for \r\n
+        state->rest_len -= line_len;
+
+        if (line_len == 2) { // \r\n\r\n
+            state->line += 2;
+            return; // end of headers
+        }
+
+        pos = memchr(state->line, ':', line_len);
+
+        if (pos) {
+            int k_len = pos - state->line;
+
+            lua_pushlstring(L, state->line, k_len); // k
+            lua_pushlstring(L, pos + 2, line_len - k_len - 2 - 2); // v
+
+            if (strcasecmp(lua_tostring(L, -2), HTTP_HDR_TRANSFER_ENC) == 0) {
+                state->is_chunked =
+                    strcasecmp(lua_tostring(L, -1), HTTP_CHUNKED) == 0;
+            }
+
+            if (strcasecmp(lua_tostring(L, -2), HTTP_HDR_CONTENT_LEN) == 0) {
+                pos = (char *)lua_tostring(L, -1); // will not be changed
+                state->content_len = parse_dec(&pos);
+            }
+
+            lua_rawset(L, -3);
+        } else {
+            lua_pushlstring(L, state->line, line_len - 2);
+            lua_setfield(L, -2, "");
+        }
+
+        state->line += line_len;
+    }
 }
 
 int ssl_error(lua_State *L, const char *fn_name) {

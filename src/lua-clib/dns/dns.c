@@ -1,7 +1,7 @@
 #include "dns.h"
 
 LUAMOD_API int luaopen_dns(lua_State *L) {
-    if (luaL_newmetatable(L, MT_DNS_CLIENT)) {
+    if (likely(luaL_newmetatable(L, MT_DNS_CLIENT))) {
         luaL_newlib(L, dns_client_index);
         lua_setfield(L, -2, "__index");
         lua_pushcfunction(L, dns_client_gc);
@@ -30,13 +30,13 @@ LUAMOD_API int luaopen_dns(lua_State *L) {
 }
 
 int dns_resolve(lua_State *L) {
-    luaF_need_args(L, 2, "dns.client.resolve");
+    luaF_need_args(L, 2, "dns resolve");
 
     lua_State *T = luaF_new_thread_or_error(L);
 
     lua_insert(L, 1); // client, conf, T -> T, client, conf
     lua_pushcfunction(T, dns_resolve_start);
-    lua_xmove(L, T, 2); // client, conf -> T
+    lua_xmove(L, T, 2); // client, conf >> T
 
     int nres;
     lua_resume(T, L, 2, &nres); // should yield, 0 nres
@@ -47,7 +47,7 @@ int dns_resolve(lua_State *L) {
 static int dns_resolve_start(lua_State *L) {
     ud_dns_client *client = lua_touserdata(L, 1);
 
-    luaL_checktype(L, 2, LUA_TTABLE); // params
+    luaL_checktype(L, 2, LUA_TTABLE); // conf
     lua_getfield(L, 2, "name");
     lua_getfield(L, 2, "type");
     lua_getfield(L, 2, "class");
@@ -56,7 +56,7 @@ static int dns_resolve_start(lua_State *L) {
     int type = luaL_optinteger(L, 4, DNS_DEFAULT_TYPE);
     int class = luaL_optinteger(L, 5, DNS_DEFAULT_CLASS);
 
-    if (client->fd == -1) {
+    if (unlikely(client->fd < 0)) {
         luaL_error(L, "not bound to socket");
     }
 
@@ -64,7 +64,7 @@ static int dns_resolve_start(lua_State *L) {
 
     int req_id = dns_pack(L, client, name, type, class);
 
-    if (lua_rawgeti(L, -1, req_id) != LUA_TNIL) {
+    if (unlikely(lua_rawgeti(L, -1, req_id) != LUA_TNIL)) {
         luaL_error(L, "dns request id already exists: %d", req_id);
     }
 
@@ -79,8 +79,8 @@ static int dns_resolve_start(lua_State *L) {
         ssize_t sent = sendto(client->fd, client->buf, client->buf_len,
             MSG_NOSIGNAL, NULL, 0);
 
-        if (sent != (ssize_t)client->buf_len) { // fail
-            if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        if (unlikely(sent != (ssize_t)client->buf_len)) { // fail
+            if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 queue_push(L, client);
                 client->can_write = 0; // socket send buf is full
             } else {
@@ -88,7 +88,7 @@ static int dns_resolve_start(lua_State *L) {
                 luaF_error_errno(L, "sendto failed; fd: %d; len: %d",
                     client->fd, client->buf_len);
             }
-        } else if (!client->parallel) {
+        } else if (likely(!client->parallel)) {
             client->can_send = 0; // need to wait for prev response
         }
     }
@@ -101,7 +101,7 @@ static int dns_resolve_start(lua_State *L) {
     lua_pushinteger(L, tmt_fd);
     lua_pushinteger(L, req_id);
 
-    return lua_yieldk(L, 0, 0, dns_resolve_continue); // longjmp
+    return lua_yieldk(L, 0, 0, dns_resolve_continue);
 }
 
 // client, tmt_fd, req_id, is_ok, req_id / err_msg
@@ -112,7 +112,7 @@ static int dns_resolve_continue(lua_State *L, int status, lua_KContext ctx) {
 
     luaF_close_or_warning(L, lua_tointeger(L, 2));
 
-    if (lua_type(L, 4) != LUA_TBOOLEAN) { // tmt
+    if (unlikely(lua_type(L, 4) != LUA_TBOOLEAN)) { // tmt
         int req_id = lua_tointeger(L, 3);
 
         unsub_req_id(L, 1, req_id);
@@ -125,7 +125,7 @@ static int dns_resolve_continue(lua_State *L, int status, lua_KContext ctx) {
         return lua_error(L);
     }
 
-    if (!lua_toboolean(L, 4)) { // loop fail
+    if (unlikely(!lua_toboolean(L, 4))) { // loop fail
         return lua_error(L);
     }
 
@@ -133,7 +133,7 @@ static int dns_resolve_continue(lua_State *L, int status, lua_KContext ctx) {
 }
 
 static int dns_client(lua_State *L) {
-    luaF_need_args(L, 1, "dns.client");
+    luaF_need_args(L, 1, "dns client");
     luaL_checktype(L, 1, LUA_TTABLE); // config
 
     lua_getfield(L, 1, "ip4");
@@ -148,11 +148,8 @@ static int dns_client(lua_State *L) {
 
     int status, nres;
 
-    ud_dns_client *client = lua_newuserdatauv(L, sizeof(ud_dns_client), 2);
-
-    if (!client) {
-        luaF_error_errno(L, F_ERROR_NEW_UD, MT_DNS_CLIENT, 2);
-    }
+    ud_dns_client *client = luaF_new_uduv_or_error(L,
+        sizeof(ud_dns_client), 2);
 
     lua_createtable(L, 0, 1);
     lua_setiuservalue(L, -2, DNS_UDUVIDX_ID_SUBS);
@@ -167,17 +164,17 @@ static int dns_client(lua_State *L) {
 
     status = inet_pton(AF_INET, ip4, &sa.sin_addr);
 
-    if (status == 0) { // invalid format
+    if (unlikely(status == 0)) { // invalid format
         luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
             AF_INET, ip4);
-    } else if (status != 1) { // other errors
+    } else if (unlikely(status != 1)) { // other errors
         luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
             AF_INET, ip4);
     }
 
     int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
 
-    if (fd == -1) {
+    if (unlikely(fd < 0)) {
         luaF_error_errno(L, "socket failed (udp nonblock)");
     }
 
@@ -204,11 +201,11 @@ static int dns_client(lua_State *L) {
 
     lua_pushcfunction(router, dns_router);
     lua_pushvalue(L, 1); // clone client
-    lua_xmove(L, router, 1); // client -> router
+    lua_xmove(L, router, 1); // client >> router
 
-    status = lua_resume(router, L, 1, &nres);
+    status = lua_resume(router, L, 1, &nres); // should yield, 0 nres
 
-    if (status != LUA_YIELD) {
+    if (unlikely(status != LUA_YIELD)) {
         luaL_error(L, "router init failed: %s", lua_tostring(router, -1));
     }
 
@@ -220,7 +217,7 @@ static int dns_client(lua_State *L) {
 static int dns_client_gc(lua_State *L) {
     ud_dns_client *client = luaL_checkudata(L, 1, MT_DNS_CLIENT);
 
-    if (client->fd == -1) {
+    if (unlikely(client->fd < 0)) {
         return 0;
     }
 
@@ -258,13 +255,9 @@ static int dns_router(lua_State *L) {
     ud_dns_client *client = lua_touserdata(L, 1);
 
     int emask = EPOLLIN | EPOLLOUT | EPOLLET;
-    int status = luaF_loop_pwatch(L, client->fd, emask, 0);
+    luaF_loop_watch(L, client->fd, emask, 0);
 
-    if (status != LUA_OK) {
-        lua_error(L);
-    }
-
-    return lua_yieldk(L, 0, 0, dns_router_continue); // longjmp
+    return lua_yieldk(L, 0, 0, dns_router_continue);
 }
 
 // called when epoll emits event on client->fd
@@ -276,7 +269,7 @@ static int dns_router_continue(lua_State *L, int status, lua_KContext ctx) {
     lua_pushvalue(L, 3); // emask or errmsg
     status = lua_pcall(L, 2, 0, 0);
 
-    if (status != LUA_OK) {
+    if (unlikely(status != LUA_OK)) {
         lua_insert(L, 2); // client, ? <- err msg
         lua_settop(L, 2); // client, err msg
         return dns_client_gc(L);
@@ -293,11 +286,11 @@ static int dns_router_process_event(lua_State *L) {
     ud_dns_client *client = lua_touserdata(L, 1);
     int emask = lua_tointeger(L, 2);
 
-    if (client->fd == -1) {
+    if (unlikely(client->fd < 0)) {
         return luaL_error(L, "dns.client is closed");
     }
 
-    if (emask_has_errors(emask)) {
+    if (unlikely(emask_has_errors(emask))) {
         luaF_error_socket(L, client->fd, emask_error_label(emask));
     }
 
@@ -309,7 +302,7 @@ static int dns_router_process_event(lua_State *L) {
     if (emask & EPOLLIN) {
         dns_router_read(L, client);
 
-        if (!client->parallel) {
+        if (likely(!client->parallel)) {
             client->can_send = 1;
             process_send_queue(L, client);
         }
@@ -542,45 +535,27 @@ static int parse_header(lua_State *L, char **buf, int *len) {
 // "\x06google\x03com\x00" - name
 // "\xC0\x0C" - pointer
 // "\x06google\x03com\xC0\x0C" - name with pointer
-static const char *parse_name(lua_State *L, char **buf, int *len) {
-    check_len(*len, 2);
+static void parse_name(lua_State *L, char **buf, int *len) {
+    while (1) {
+        check_len(*len, 1);
 
-    if (**buf == 0) {
-        luaL_error(L, "zero length name");
-    } else if (**buf > LABEL_MAX_LEN) {
-        *buf += 2;
-        *len -= 2;
-        return "*";
-    }
-
-    const char *name = *buf + 1;
-
-    *buf += 1 + **buf;
-    *len -= 1 + **buf;
-
-    while (*len > 0 && **buf) {
         int label_len = **buf;
 
-        if (**buf > LABEL_MAX_LEN) {
-            **buf = '*';
+        if (unlikely(label_len == 0)) {
             (*buf)++;
             (*len)--;
-            check_len(*len, 1);
-            **buf = '\0';
-            break;
+            return;
         }
 
-        **buf = '.';
-        *buf += 1 + label_len;
-        *len -= 1 + label_len;
+        if (unlikely(label_len > LABEL_MAX_LEN)) {
+            *buf += 2;
+            *len -= 2;
+            return;
+        }
+
+        *buf += label_len + 1;
+        *len -= label_len + 1;
     }
-
-    (*buf)++;
-    (*len)--;
-
-    check_len(*len, 0);
-
-    return name;
 }
 
 static void parse_push_answer(lua_State *L, char **buf, int *len, int index) {
@@ -678,32 +653,33 @@ static int dns_pack(
     question.class = htons(class);
 
     memcpy(buf, &header, sizeof(header));
-    buf += sizeof(dns_header_t) + 1; // extra space for first label len
+    buf += sizeof(dns_header_t) + 1; // +1 for first label len
 
     memcpy(buf, name, name_len);
-    buf += name_len;
-    *buf++ = 0; // domain name null terminator
+    buf += name_len + 1; // +1 for nul
+    *(buf - 1) = '\0';
 
     memcpy(buf, &question, sizeof(question));
 
     int label_len = 0;
-    buf = client->buf + sizeof(dns_header_t);
+    buf = client->buf + sizeof(dns_header_t); // first label len
 
     for (int i = 0; i < name_len; ++i) {
-        if (name[i] == '.') {
-            if (label_len == 0) {
-                luaL_error(L, "label is empty");
-            } else if (label_len > LABEL_MAX_LEN) {
-                luaL_error(L, "label is too long; length: %d; max len: %d",
-                    label_len, LABEL_MAX_LEN);
-            }
+        unsigned char c = name[i];
 
-            *buf = label_len;
-            buf += i + 1;
-            label_len = 0;
-        } else {
+        if (likely(c != '.')) {
             label_len++;
+            continue;
         }
+
+        if (unlikely(label_len < LABEL_MIN_LEN || label_len > LABEL_MAX_LEN)) {
+            luaL_error(L, "invalid label length: %d; min: %d; max: %d",
+                label_len, LABEL_MIN_LEN, LABEL_MAX_LEN);
+        }
+
+        *buf = label_len;
+        buf += label_len + 1;
+        label_len = 0;
     }
 
     *buf = label_len;

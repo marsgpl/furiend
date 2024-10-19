@@ -14,23 +14,21 @@ static int request_finish(lua_State *L, ud_http_request *req);
 static void resize_response_buf(lua_State *L, ud_http_request *req);
 
 // request
-static void parse_params(lua_State *L, ud_http_request *req, int params_idx);
-static void check_params(lua_State *L, ud_http_request *req);
+static void parse_conf(lua_State *L, ud_http_request *req, int conf_idx);
+static void check_conf(lua_State *L, ud_http_request *req);
 static void build_headers(lua_State *L, ud_http_request *req);
 
 // response
-static void parse_headers(lua_State *L, headers_parser_state *state);
-static void parse_headline(headers_parser_state *state, headline *hline);
 static void move_chunked(ud_http_request *req, headers_parser_state *state);
 
 int http_request(lua_State *L) {
-    luaF_need_args(L, 1, "http.request");
-    luaL_checktype(L, 1, LUA_TTABLE); // params
+    luaF_need_args(L, 1, "http request");
+    luaL_checktype(L, 1, LUA_TTABLE); // conf
 
     lua_State *T = luaF_new_thread_or_error(L);
-    lua_insert(L, 1); // params, T -> T, params
+    lua_insert(L, 1); // conf, T -> T, conf
     lua_pushcfunction(T, request_start);
-    lua_xmove(L, T, 1); // params -> T
+    lua_xmove(L, T, 1); // conf >> T
 
     int nres;
     lua_resume(T, L, 1, &nres); // should yield, 0 nres
@@ -70,37 +68,34 @@ int http_request_gc(lua_State *L) {
 }
 
 static int request_start(lua_State *L) {
-    ud_http_request *req = lua_newuserdatauv(L, sizeof(ud_http_request), 0);
-
-    if (!req) {
-        luaF_error_errno(L, F_ERROR_NEW_UD, MT_HTTP_REQUEST, 0);
-    }
+    ud_http_request *req = luaF_new_uduv_or_error(L,
+        sizeof(ud_http_request), 1);
 
     memset(req, 0, sizeof(ud_http_request));
 
-    parse_params(L, req, 1);
-    check_params(L, req);
+    parse_conf(L, req, 1);
+    check_conf(L, req);
 
     int status;
-    http_request_params *params = &(req->params);
+    http_request_conf *conf = &(req->conf);
     struct sockaddr_in sa = {0};
 
     sa.sin_family = AF_INET;
-    sa.sin_port = htons(params->port);
+    sa.sin_port = htons(conf->port);
 
-    status = inet_pton(AF_INET, params->ip4, &sa.sin_addr);
+    status = inet_pton(AF_INET, conf->ip4, &sa.sin_addr);
 
-    if (status == 0) { // invalid format
+    if (unlikely(status == 0)) { // invalid format
         luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
-            AF_INET, params->ip4);
-    } else if (status != 1) { // other errors
+            AF_INET, conf->ip4);
+    } else if (unlikely(status != 1)) { // other errors
         luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
-            AF_INET, params->ip4);
+            AF_INET, conf->ip4);
     }
 
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
-    if (fd == -1) {
+    if (unlikely(fd < 0)) {
         luaF_error_errno(L, "socket failed (tcp nonblock)");
     }
 
@@ -115,24 +110,18 @@ static int request_start(lua_State *L) {
 
     if (status != -1) {
         luaF_error_errno(L, "connected immediately; addr: %s:%d",
-            params->ip4, params->port);
+            conf->ip4, conf->port);
     } else if (errno != EINPROGRESS) {
         luaF_error_errno(L, "connect failed; addr: %s:%d",
-            params->ip4, params->port);
+            conf->ip4, conf->port);
     }
 
-    status = luaF_loop_pwatch(L, fd, EPOLLIN | EPOLLOUT | EPOLLET, 0);
+    luaF_loop_watch(L, fd, EPOLLIN | EPOLLOUT | EPOLLET, 0);
 
-    if (status != LUA_OK) {
-        lua_error(L);
-    }
+    lua_insert(L, 1); // config, req -> req, config
+    lua_setiuservalue(L, 1, HTTP_REQUEST_UDUVIDX_CONFIG); // config >> req
 
-    lua_insert(L, 1); // config, ..., req -> req, config, ...
-    lua_settop(L, 2); // req, config
-
-    // keep config in the stack to prevent req->body gc
-
-    return lua_yieldk(L, 0, 0, request_continue); // longjmp
+    return lua_yieldk(L, 0, 0, request_continue);
 }
 
 // req, sock_fd/tmt_fd, emask/errmsg
@@ -146,7 +135,7 @@ static int request_continue(lua_State *L, int status, lua_KContext ctx) {
     int fd = lua_tointeger(L, F_LOOP_FD_REL_IDX);
     int emask = lua_tointeger(L, F_LOOP_EMASK_REL_IDX);
 
-    if (emask_has_errors(emask)) {
+    if (unlikely(emask_has_errors(emask))) {
         luaF_error_socket(L, fd, emask_error_label(emask));
     }
 
@@ -185,9 +174,9 @@ static int request_continue(lua_State *L, int status, lua_KContext ctx) {
         return request_finish(L, req);
     }
 
-    lua_settop(L, 2); // req, config
+    lua_settop(L, 1); // req
 
-    return lua_yieldk(L, 0, 0, request_continue); // longjmp
+    return lua_yieldk(L, 0, 0, request_continue);
 }
 
 static void request_connecting(lua_State *L, ud_http_request *req) {
@@ -198,7 +187,7 @@ static void request_connecting(lua_State *L, ud_http_request *req) {
         lua_error(L);
     }
 
-    if (unlikely(!req->params.https)) {
+    if (unlikely(!req->conf.https)) {
         req->state = HTTP_REQ_STATE_SENDING_PLAIN;
         request_sending_plain(L, req);
         return;
@@ -240,7 +229,7 @@ static void request_connecting_tls(lua_State *L, ud_http_request *req) {
             ssl_error_ret(L, "SSL_connect", req->ssl, ret);
         }
     } else { // ok
-        if (likely(req->params.https_verify_cert)) {
+        if (likely(req->conf.https_verify_cert)) {
             long result = SSL_get_verify_result(req->ssl);
 
             if (unlikely(result != X509_V_OK)) {
@@ -264,13 +253,10 @@ static void request_sending_plain(lua_State *L, ud_http_request *req) {
 
         if (unlikely(sent == 0)) {
             luaL_error(L, "headers: send sent 0");
-        } else if (sent == -1) {
+        } else if (sent < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
-                luaF_error_errno(L, "headers: send failed; len: %d; sent: %d",
-                    req->headers_len - req->headers_len_sent,
-                    sent);
+                luaF_error_errno(L, "headers: send failed");
             }
-
             return; // try again later
         }
 
@@ -285,13 +271,10 @@ static void request_sending_plain(lua_State *L, ud_http_request *req) {
 
         if (unlikely(sent == 0)) {
             luaL_error(L, "body: send sent 0");
-        } else if (sent == -1) {
+        } else if (sent < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
-                luaF_error_errno(L, "body: send failed; len: %d; sent: %d",
-                    req->body_len - req->body_len_sent,
-                    sent);
+                luaF_error_errno(L, "body: send failed");
             }
-
             return; // try again later
         }
 
@@ -363,17 +346,16 @@ static void request_reading_plain(lua_State *L, ud_http_request *req) {
         if (read == 0) {
             req->state = HTTP_REQ_STATE_DONE;
             return;
-        } else if (read == -1) {
+        } else if (read < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
                 luaF_error_errno(L, "recv failed; fd: %d", req->fd);
             }
-
             return; // try again later
         }
 
         req->response_len += read;
 
-        if (0) { // TODO: check if all data received
+        if (0) {
             req->state = HTTP_REQ_STATE_DONE;
             return;
         }
@@ -404,7 +386,7 @@ static void request_reading_tls(lua_State *L, ud_http_request *req) {
 
         req->response_len += read;
 
-        if (0) { // TODO: check if all data received
+        if (0) {
             request_shutdown_tls(L, req);
             req->state = HTTP_REQ_STATE_DONE;
             return;
@@ -425,49 +407,51 @@ static void request_shutdown_tls(lua_State *L, ud_http_request *req) {
 }
 
 static void request_on_send_complete(lua_State *L, ud_http_request *req) {
-    if (!req->params.show_request) {
+    if (!req->conf.show_request) {
         free(req->headers);
         req->headers = NULL;
     }
 
-    req->response_size = HTTP_RESPONSE_INITIAL_SIZE;
-    req->response = malloc(req->response_size);
+    req->response_size = HTTP_RESPONSE_INITIAL_SIZE - 1;
+    req->response = malloc(HTTP_RESPONSE_INITIAL_SIZE);
 
     if (unlikely(req->response == NULL)) {
         luaF_error_errno(L, "response malloc failed; size: %d",
-            req->response_size);
+            HTTP_RESPONSE_INITIAL_SIZE);
     }
 }
 
 static int request_finish(lua_State *L, ud_http_request *req) {
-    int show_request = req->params.show_request;
+    int show_request = req->conf.show_request;
 
     req->response[req->response_len] = '\0'; // extra byte was reserved
 
-    headers_parser_state state = {
-        .line = req->response,
-        .rest_len = req->response_len,
-        .is_chunked = 0,
-        .ltrim = 0,
-        .rtrim = 0,
-    };
+    static headers_parser_state state;
+    static res_headline hline;
 
-    headline hline = {0};
+    memset(&hline, 0, sizeof(res_headline));
 
-    // HTTP/x.x CODE MESSAGE\r\n
-    parse_headline(&state, &hline);
+    state.line = req->response;
+    state.rest_len = req->response_len;
+    state.is_chunked = 0;
+    state.content_len = 0;
+    state.ltrim = 0;
+    state.rtrim = 0;
 
-    // version, code, message, headers, body, request?
-    lua_createtable(L, 0, 5 + show_request);
+    parse_res_headline(&state, &hline);
+
+    // version, status_code, status_message, headers, body
+    // request?, request_body?
+    lua_createtable(L, 0, 5 + show_request + show_request);
 
     lua_pushlstring(L, hline.ver, hline.ver_len);
     lua_setfield(L, -2, "version");
 
     lua_pushinteger(L, hline.code);
-    lua_setfield(L, -2, "code");
+    lua_setfield(L, -2, "status_code");
 
     lua_pushlstring(L, hline.msg, hline.msg_len);
-    lua_setfield(L, -2, "message");
+    lua_setfield(L, -2, "status_message");
 
     lua_createtable(L, 0, HTTP_EXPECT_RESPONSE_HEADERS_N);
 
@@ -514,87 +498,87 @@ static int request_finish(lua_State *L, ud_http_request *req) {
 }
 
 static void resize_response_buf(lua_State *L, ud_http_request *req) {
-    // -1 reserves extra byte for '\0'
-    if (req->response_size - req->response_len < HTTP_READ_MAX - 1) {
+    if (req->response_size - req->response_len < HTTP_READ_MAX) {
         // to avoid lots of allocs, start parsing response in advance
         // and try to find response size (content length or chunk length)
-        int size = req->response_size * 2;
+        int size = req->response_size + 1 + HTTP_RESPONSE_INITIAL_SIZE;
 
         if (unlikely(size > HTTP_RESPONSE_MAX_SIZE)) {
             luaL_error(L, "response is too big; max: %d",
                 HTTP_RESPONSE_MAX_SIZE);
         }
 
-        char *p = realloc(req->response, size);
+        char *buf = realloc(req->response, size);
 
-        if (unlikely(p == NULL)) {
-            luaF_error_errno(L, "response realloc error; size: %d", size);
+        if (unlikely(buf == NULL)) {
+            luaF_error_errno(L, "realloc failed; from: %d; to: %d",
+                req->response_size, size);
         }
 
-        req->response = p;
-        req->response_size = size;
+        req->response = buf;
+        req->response_size = size - 1;
     }
 }
 
-static void parse_params(lua_State *L, ud_http_request *req, int params_idx) {
-    http_request_params *params = &(req->params);
+static void parse_conf(lua_State *L, ud_http_request *req, int conf_idx) {
+    http_request_conf *conf = &(req->conf);
     int idx = lua_gettop(L);
 
-    lua_getfield(L, params_idx, "https");
-    lua_getfield(L, params_idx, "https_verify_cert");
-    lua_getfield(L, params_idx, "method");
-    lua_getfield(L, params_idx, "host");
-    lua_getfield(L, params_idx, "ip4");
-    lua_getfield(L, params_idx, "path");
-    lua_getfield(L, params_idx, "timeout");
-    lua_getfield(L, params_idx, "port");
-    lua_getfield(L, params_idx, "user_agent");
-    lua_getfield(L, params_idx, "show_request");
-    lua_getfield(L, params_idx, "body");
-    lua_getfield(L, params_idx, "content_type");
+    lua_getfield(L, conf_idx, "https");
+    lua_getfield(L, conf_idx, "https_verify_cert");
+    lua_getfield(L, conf_idx, "method");
+    lua_getfield(L, conf_idx, "host");
+    lua_getfield(L, conf_idx, "ip4");
+    lua_getfield(L, conf_idx, "path");
+    lua_getfield(L, conf_idx, "timeout");
+    lua_getfield(L, conf_idx, "port");
+    lua_getfield(L, conf_idx, "user_agent");
+    lua_getfield(L, conf_idx, "show_request");
+    lua_getfield(L, conf_idx, "body");
+    lua_getfield(L, conf_idx, "content_type");
 
     const char *method = luaL_optstring(L, idx + 3, HTTP_DEFAULT_METHOD);
     unsigned char method0c = method[0];
 
-    params->show_request = lua_toboolean(L, idx + 10);
-    params->https = lua_toboolean(L, idx + 1);
-    params->https_verify_cert = lua_isnil(L, idx + 2)
+    conf->show_request = lua_toboolean(L, idx + 10);
+    conf->https = lua_toboolean(L, idx + 1);
+    conf->https_verify_cert = lua_isnil(L, idx + 2)
         ? HTTPS_VERIFY_CERT_DEFAULT
         : lua_toboolean(L, idx + 2);
-    params->have_body = (method0c == 'P' || method0c == 'p') && (
+    conf->can_have_body = (method0c == 'P' || method0c == 'p') && (
         strcasecmp(method, "POST") == 0 ||
         strcasecmp(method, "PUT") == 0 ||
         strcasecmp(method, "PATCH") == 0);
     req->body = luaL_optlstring(L, idx + 11, "", &(req->body_len));
 
-    params->method = method;
-    params->host = luaL_optstring(L, idx + 4, "");
-    params->ip4 = luaL_checkstring(L, idx + 5);
-    params->path = luaL_optstring(L, idx + 6, HTTP_DEFAULT_PATH);
-    params->timeout = luaL_optnumber(L, idx + 7, HTTP_DEFAULT_TIMEOUT);
-    params->user_agent = luaL_optstring(L, idx + 9, HTTP_DEFAULT_USER_AGENT);
-    params->content_type = luaL_optstring(L, idx + 12,
+    conf->method = method;
+    conf->host = luaL_optstring(L, idx + 4, "");
+    conf->ip4 = luaL_checkstring(L, idx + 5);
+    conf->path = luaL_optstring(L, idx + 6, HTTP_DEFAULT_PATH);
+    conf->timeout = luaL_optnumber(L, idx + 7, HTTP_DEFAULT_TIMEOUT);
+    conf->user_agent = luaL_optstring(L, idx + 9, HTTP_DEFAULT_USER_AGENT);
+    conf->content_type = luaL_optstring(L, idx + 12,
         HTTP_DEFAULT_CONTENT_TYPE);
-    params->port = luaL_optinteger(L, idx + 8, params->https
+    conf->port = luaL_optinteger(L, idx + 8, conf->https
         ? HTTPS_DEFAULT_PORT
         : HTTP_DEFAULT_PORT);
 
     lua_settop(L, idx);
 }
 
-static void check_params(lua_State *L, ud_http_request *req) {
-    http_request_params *params = &(req->params);
+static void check_conf(lua_State *L, ud_http_request *req) {
+    http_request_conf *conf = &(req->conf);
     size_t len;
 
-    len = strlen(params->host);
+    len = strlen(conf->host);
     if (len > HTTP_HOST_MAX_LEN) {
         luaL_error(L, "invalid len for host: %s; len: %d; max: %d",
-            params->host, len, HTTP_HOST_MAX_LEN);
+            conf->host, len, HTTP_HOST_MAX_LEN);
     }
 
-    if (!params->have_body && req->body_len > 0) {
+    if (!conf->can_have_body && req->body_len > 0) {
         luaL_error(L, "specified http method does not support body"
-            "; method: %s; body len: %d", params->method, req->body_len);
+            "; method: %s; body len: %d", conf->method, req->body_len);
     }
 
     if (req->body_len > HTTP_QUERY_BODY_MAX_LEN) {
@@ -605,20 +589,19 @@ static void check_params(lua_State *L, ud_http_request *req) {
 }
 
 static void build_headers(lua_State *L, ud_http_request *req) {
-    http_request_params *params = &(req->params);
+    http_request_conf *conf = &(req->conf);
 
-    const char *method = params->method;
-    const char *host = params->host;
-    const char *user_agent = params->user_agent;
-    const char *content_type = params->content_type;
-    int have_body = params->have_body;
+    const char *method = conf->method;
+    const char *host = conf->host;
+    const char *user_agent = conf->user_agent;
+    const char *content_type = conf->content_type;
+    int can_have_body = conf->can_have_body;
 
     int len = strlen(method)
-        + strlen(" ") + strlen(params->path)
+        + strlen(" ") + strlen(conf->path)
         + strlen(" ") + strlen(HTTP_VERSION)
         + strlen(SEP)
-        + strlen(HTTP_HDR_CONN_CLOSE)
-        + strlen(SEP)
+        + strlen(HTTP_HDR_CONN_CLOSE_SEP)
         + strlen(SEP)
         + 1; // + nul for snprintf
 
@@ -640,8 +623,8 @@ static void build_headers(lua_State *L, ud_http_request *req) {
             + strlen(SEP);
     }
 
-    if (have_body) {
-        len += strlen(HTTP_HDR_CONTENT_LENGTH ": ")
+    if (can_have_body) {
+        len += strlen(HTTP_HDR_CONTENT_LEN ": ")
             + uint_len(req->body_len)
             + strlen(SEP);
     }
@@ -663,103 +646,23 @@ static void build_headers(lua_State *L, ud_http_request *req) {
 
     #define PUSH(line, ...) { \
         r = snprintf(headers, len, line SEP __VA_OPT__(,) __VA_ARGS__); \
-        if (r == -1) luaF_error_errno(L, "snprintf failed"); \
+        if (unlikely(r < 0)) luaF_error_errno(L, "snprintf failed"); \
         headers += r; \
         len -= r; \
     }
 
-    PUSH("%s %s %s", method, params->path, HTTP_VERSION);
-    PUSH(HTTP_HDR_CONN_CLOSE);
+    PUSH("%s %s %s", method, conf->path, HTTP_VERSION);
     if (host[0]) PUSH(HTTP_HDR_HOST ": %s", host);
     if (user_agent[0]) PUSH(HTTP_HDR_USER_AGENT ": %s", user_agent);
     if (content_type[0]) PUSH(HTTP_HDR_CONTENT_TYPE ": %s", content_type);
-    if (have_body) PUSH(HTTP_HDR_CONTENT_LENGTH ": %lu", req->body_len);
-    PUSH(""); // to produce \r\n\r\n
+    if (can_have_body) PUSH(HTTP_HDR_CONTENT_LEN ": %lu", req->body_len);
+    PUSH(HTTP_HDR_CONN_CLOSE_SEP);
 
     #undef PUSH
 
     if (len != 1) {
         luaL_error(L, "request headers len calculated incorrectly: %d", len);
     }
-}
-
-static void parse_headers(lua_State *L, headers_parser_state *state) {
-    while (1) {
-        char *pos = memchr(state->line, '\r', state->rest_len);
-
-        if (!pos || *(pos + 1) != '\n') {
-            break;
-        }
-
-        int line_len = pos - state->line + 2; // +2 for \r\n
-        state->rest_len -= line_len;
-
-        if (line_len == 2) { // \r\n\r\n
-            state->line += 2;
-            return; // end of headers
-        }
-
-        pos = memchr(state->line, ':', line_len);
-
-        if (pos) {
-            int k_len = pos - state->line;
-
-            lua_pushlstring(L, state->line, k_len); // k
-            lua_pushlstring(L, pos + 2, line_len - k_len - 2 - 2); // v
-
-            if (!state->is_chunked
-                && strcasecmp(lua_tostring(L, -2), HTTP_HDR_TRANSFER_ENC) == 0
-                && strcasecmp(lua_tostring(L, -1), "chunked") == 0
-            ) {
-                state->is_chunked = 1;
-            }
-
-            lua_rawset(L, -3);
-        } else {
-            lua_pushlstring(L, state->line, line_len - 2);
-            lua_setfield(L, -2, "");
-        }
-
-        state->line += line_len;
-    }
-}
-
-static void parse_headline(headers_parser_state *state, headline *hline) {
-    char *pos = memchr(state->line, '\r', state->rest_len);
-
-    if (!pos || *(pos + 1) != '\n') {
-        return;
-    }
-
-    int line_len = pos - state->line + 2; // +2 for \r\n
-    pos = memchr(state->line, ' ', line_len);
-
-    if (likely(pos)) {
-        // HTTP/1.1
-
-        hline->ver = state->line;
-        hline->ver_len = pos - state->line;
-
-        // 200
-
-        pos++;
-        while (*pos >= '0' && *pos <= '9') {
-            hline->code = (hline->code * 10) + (*pos - '0');
-            pos++;
-        }
-
-        // OK
-
-        hline->msg = pos + 1; // skip 1 non-digit
-        hline->msg_len = line_len - 2 - 1 - (pos - state->line);
-
-        if (hline->msg_len < 0) {
-            hline->msg_len = 0;
-        }
-    }
-
-    state->line += line_len;
-    state->rest_len -= line_len;
 }
 
 static void move_chunked(ud_http_request *req, headers_parser_state *state) {
@@ -772,7 +675,7 @@ static void move_chunked(ud_http_request *req, headers_parser_state *state) {
 
     state->ltrim = end - pos + 2;
 
-    int chunk_len = parse_hex(pos, end);
+    int chunk_len = parse_hex(&pos);
 
     if (chunk_len <= 0 || chunk_len > HTTP_CHUNK_MAX_LEN) {
         return;

@@ -20,6 +20,7 @@ else # not created
         --env ENV=/root/.profile \
         --network furiend \
         --ip 172.20.0.2 \
+        --publish 127.0.0.1:19001:19001 \
         --hostname shell \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \

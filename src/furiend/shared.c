@@ -1,11 +1,95 @@
 #include "shared.h"
 
+static int loop_watch(lua_State *L);
+
+static const int dec_to_int[256] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,
+};
+
+static const int hex_to_int[256] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+    -1,-1,-1,-1,-1,-1,-1,
+    10, 11, 12, 13, 14, 15,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    10, 11, 12, 13, 14, 15,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,
+};
+
+int parse_dec(char **pos) {
+    int result = 0;
+    int digit = dec_to_int[(int)(**pos)];
+
+    while (likely(digit != -1)) {
+        result = (result * 10) + digit;
+        (*pos)++;
+        digit = dec_to_int[(int)(**pos)];
+    }
+
+    return result;
+}
+
+int parse_hex(char **pos) {
+    int result = 0;
+    int digit = hex_to_int[(int)(**pos)];
+
+    while (likely(digit != -1)) {
+        result = (result * 16) + digit;
+        (*pos)++;
+        digit = hex_to_int[(int)(**pos)];
+    }
+
+    return result;
+}
+
+int uint_len(uint64_t num) {
+    if (num < 10ULL) return 1;
+    if (num < 100ULL) return 2;
+    if (num < 1000ULL) return 3;
+    if (num < 10000ULL) return 4;
+    if (num < 100000ULL) return 5;
+    if (num < 1000000ULL) return 6;
+    if (num < 10000000ULL) return 7;
+    if (num < 100000000ULL) return 8;
+    if (num < 1000000000ULL) return 9;
+    if (num < 10000000000ULL) return 10;
+    if (num < 100000000000ULL) return 11;
+    if (num < 1000000000000ULL) return 12;
+    if (num < 10000000000000ULL) return 13;
+    if (num < 100000000000000ULL) return 14;
+    if (num < 1000000000000000ULL) return 15;
+    if (num < 10000000000000000ULL) return 16;
+    if (num < 100000000000000000ULL) return 17;
+    if (num < 1000000000000000000ULL) return 18;
+    if (num < 10000000000000000000ULL) return 19;
+    return 20; // max: 18446744073709551615ULL
+}
+
 int get_socket_error_code(int fd) {
     int value;
     socklen_t value_len = sizeof(value);
     int ret = getsockopt(fd, SOL_SOCKET, SO_ERROR, &value, &value_len);
 
-    if (unlikely(ret == -1)) {
+    if (unlikely(ret < 0)) {
         return F_GETSOCKOPT_FAILED;
     }
 
@@ -15,7 +99,7 @@ int get_socket_error_code(int fd) {
 void luaF_print_time(lua_State *L, FILE *stream) {
     struct timespec ts;
 
-    if (unlikely(clock_gettime(CLOCK_REALTIME, &ts) == -1)) {
+    if (unlikely(clock_gettime(CLOCK_REALTIME, &ts) < 0)) {
         luaF_error_errno(L, "clock_gettime failed");
     }
 
@@ -144,10 +228,19 @@ void luaF_need_args(lua_State *L, int need_args_n, const char *label) {
     }
 }
 
+void luaF_min_max_args(lua_State *L, int min, int max, const char *label) {
+    int args_n = lua_gettop(L);
+
+    if (unlikely(args_n < min && args_n > max)) {
+        luaL_error(L, "%s: min args: %d; max args: %d; provided: %d",
+            label, min, max, lua_gettop(L));
+    }
+}
+
 void luaF_close_or_warning(lua_State *L, int fd) {
     int errno_bkp = errno;
 
-    if (unlikely(close(fd) == -1)) {
+    if (unlikely(close(fd) < 0)) {
         luaF_warning_errno(L, "close failed; fd: %d", fd);
         errno = errno_bkp;
     }
@@ -159,7 +252,7 @@ int luaF_set_timeout(lua_State *L, lua_Number duration_s) {
 
     int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
 
-    if (unlikely(fd == -1)) {
+    if (unlikely(fd < 0)) {
         luaF_error_errno(L, "timerfd_create failed; clock id: %d; flags: %d",
             CLOCK_MONOTONIC, TFD_NONBLOCK);
     }
@@ -169,14 +262,14 @@ int luaF_set_timeout(lua_State *L, lua_Number duration_s) {
     tm.it_value.tv_sec = sec;
     tm.it_value.tv_nsec = nsec;
 
-    if (unlikely(timerfd_settime(fd, 0, &tm, NULL) == -1)) {
+    if (unlikely(timerfd_settime(fd, 0, &tm, NULL) < 0)) {
         luaF_close_or_warning(L, fd);
         luaF_error_errno(L, "timerfd_settime failed"
             "; fd: %d; sec: %d; nsec: %d",
             fd, sec, nsec);
     }
 
-    int status = luaF_loop_pwatch(L, fd, EPOLLIN | EPOLLONESHOT, 0);
+    int status = luaF_loop_protected_watch(L, fd, EPOLLIN | EPOLLONESHOT, 0);
 
     if (unlikely(status != LUA_OK)) {
         luaF_close_or_warning(L, fd);
@@ -193,10 +286,10 @@ void luaF_push_error_socket(lua_State *L, int fd, const char *cause, int code) {
 
     if (unlikely(code == F_GETSOCKOPT_FAILED)) {
         lua_pushfstring(L, "%s; fd: %d; getsockopt failed: %s (%d)",
-            strerror(errno), errno, fd, cause);
+            cause, fd, strerror(errno), errno);
     } else {
         lua_pushfstring(L, "%s; fd: %d; error: %s (%d)",
-            strerror(code), code, fd, cause);
+            cause, fd, strerror(code), code);
     }
 }
 
@@ -216,6 +309,17 @@ lua_State *luaF_new_thread_or_error(lua_State *L) {
     return T;
 }
 
+void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n) {
+    void *ud = lua_newuserdatauv(L, size, uv_n);
+
+    if (unlikely(ud == NULL)) {
+        luaF_error_errno(L, "lua_newuserdatauv failed; size: %d; uv_n: %d",
+            size, uv_n);
+    }
+
+    return ud;
+}
+
 // https://www.lua.org/manual/5.4/manual.html#4.4.1
 const char *luaF_status_label(int status) {
     switch (status) {
@@ -230,16 +334,20 @@ const char *luaF_status_label(int status) {
     }
 }
 
-int loop_watch(lua_State *L) {
+static int loop_watch(lua_State *L) {
     int fd = luaL_checkinteger(L, 1);
     int emask = luaL_checkinteger(L, 2);
     // 3 = sub thread, can differ from L
+
+    if (unlikely(fd <= 0)) {
+        luaL_error(L, "loop.watch: invalid fd: %d", fd);
+    }
 
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP); // fd, emask, sub, loop
 
     ud_loop *loop = luaL_checkudata(L, -1, F_MT_LOOP);
 
-    if (unlikely(loop->fd == -1)) {
+    if (unlikely(loop->fd < 0)) {
         luaL_error(L, "watch failed: loop is closed");
     }
 
@@ -248,7 +356,7 @@ int loop_watch(lua_State *L) {
     ee.data.fd = fd;
     ee.events = emask;
 
-    if (unlikely(epoll_ctl(loop->fd, EPOLL_CTL_ADD, fd, &ee) == -1)) {
+    if (unlikely(epoll_ctl(loop->fd, EPOLL_CTL_ADD, fd, &ee) < 0)) {
         luaF_error_errno(L, "epoll_ctl add failed"
             "; epoll fd: %d; fd: %d; event mask: %d",
             loop->fd, fd, emask);
@@ -262,17 +370,35 @@ int loop_watch(lua_State *L) {
     return 0;
 }
 
-// fd is auto removed from loop epoll on close(fd) (unless it was duped)
-// fd is removed from fd_subs by loop on thread finish
-// so luaF_loop_unwatch is not needed
-int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx) {
+int luaF_loop_watch(lua_State *L, int fd, int emask, int sub_idx) {
     luaL_checkstack(L, 4, "loop watch");
 
     lua_pushcfunction(L, loop_watch);
     lua_pushinteger(L, fd);
     lua_pushinteger(L, emask);
 
-    if (unlikely(sub_idx)) {
+    if (unlikely(sub_idx != 0)) {
+        lua_pushvalue(L, sub_idx);
+    } else {
+        lua_pushthread(L);
+    }
+
+    lua_call(L, 3, 0);
+
+    return LUA_OK;
+}
+
+// fd is auto removed from loop epoll on close(fd) (unless it was duped)
+// fd is removed from fd_subs by loop on thread finish
+// so luaF_loop_unwatch is not needed
+int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx) {
+    luaL_checkstack(L, 4, "loop protected watch");
+
+    lua_pushcfunction(L, loop_watch);
+    lua_pushinteger(L, fd);
+    lua_pushinteger(L, emask);
+
+    if (unlikely(sub_idx != 0)) {
         lua_pushvalue(L, sub_idx);
     } else {
         lua_pushthread(L);

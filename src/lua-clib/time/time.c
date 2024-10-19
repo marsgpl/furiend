@@ -10,7 +10,7 @@ static int get_time(lua_State *L) {
 
     struct timespec ts;
 
-    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
+    if (unlikely(clock_gettime(CLOCK_REALTIME, &ts) < 0)) {
         luaF_error_errno(L, "clock_gettime failed");
     }
 

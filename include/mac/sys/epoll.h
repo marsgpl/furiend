@@ -2,6 +2,7 @@
 #define EPOLL_STUB_H
 
 #include <stdint.h>
+#include <sys/socket.h>
 
 #define SOCK_NONBLOCK 0
 
@@ -41,5 +42,9 @@ struct epoll_event {
 int epoll_create1(int flags);
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int tmt_ms);
+
+int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
+
+void *memrchr(const void *s, int c, size_t n);
 
 #endif

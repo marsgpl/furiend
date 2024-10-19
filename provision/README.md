@@ -1,6 +1,6 @@
 # Füriend - provision
 
-## Digitalocean - Furiend Entourage #2 - fe2
+## Digitalocean - Füriend Entourage #2 - fe2
 
 FRA, Alma 9, Basic/Regular, 4/mo, ipv6, PTR: $FE2_HOST
 
@@ -42,8 +42,14 @@ cloudflare POST dns_records "{\"type\":\"AAAA\",\"name\":\"fe2\",\"content\":\"$
 
 ## selinux
 
-on access error (in case files were moved)
+```sh
+# on access error (in case files were moved)
+restorecon -v -R /usr/share/nginx
+```
+
+## port forward
 
 ```sh
-restorecon -v -R /usr/share/nginx
+. provision/.env
+ssh -p 2 -vnNT -R 19001:127.0.0.1:19001 root@$FE2_IP4
 ```

@@ -13,7 +13,7 @@ local wait = async.wait
 local names = {
     "cloudflare.com",
     "google.com",
-    "lua.org",
+    "api.telegram.org",
 }
 
 return function()

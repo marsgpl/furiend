@@ -7,7 +7,7 @@ local function log(msg, ...)
     local date = string.format("%.3f", time())
     local sep = select("#", ...) > 0 and ": " or "\n"
 
-    io.stderr:write(date.."  "..msg..sep):flush()
+    io.stderr:write(date .. "  " .. msg .. sep):flush()
     trace(...)
 end
 

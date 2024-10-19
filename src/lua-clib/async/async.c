@@ -1,7 +1,13 @@
 #include "async.h"
 
 LUAMOD_API int luaopen_async(lua_State *L) {
+    if (likely(luaL_newmetatable(L, F_MT_LOOP))) {
+        lua_pushcfunction(L, loop_gc);
+        lua_setfield(L, -2, "__gc");
+    }
+
     luaL_newlib(L, async_index);
+
     return 1;
 }
 
@@ -21,33 +27,23 @@ int async_loop(lua_State *L) {
     lua_State *T = luaF_new_thread_or_error(L);
 
     lua_insert(L, 1); // fn, T -> T, fn
-    lua_xmove(L, T, 1); // fn -> T
+    lua_xmove(L, T, 1); // fn >> T
 
-    ud_loop *loop = lua_newuserdatauv(L, sizeof(ud_loop), 0);
-
-    if (unlikely(loop == NULL)) {
-        luaF_error_errno(L, F_ERROR_NEW_UD, F_MT_LOOP, 0);
-    }
+    ud_loop *loop = luaF_new_uduv_or_error(L, sizeof(ud_loop), 0);
 
     int fd = epoll_create1(0);
 
-    if (unlikely(fd == -1)) {
+    if (unlikely(fd < 0)) {
         luaF_error_errno(L, "epoll_create1 failed; flags: %d", 0);
     }
 
     loop->fd = fd;
 
-    // need loop ud at index 1 for fast manual loop_gc
+    luaL_setmetatable(L, F_MT_LOOP);
+
     lua_pushvalue(L, -1); // T, ud, ud
     lua_insert(L, 1); // ud, T, ud
-
-    if (likely(luaL_newmetatable(L, F_MT_LOOP))) {
-        lua_pushcfunction(L, loop_gc);
-        lua_setfield(L, -2, "__gc");
-    }
-
-    lua_setmetatable(L, -2); // mt -> ud
-    lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP);
+    lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP); // ud, T
 
     lua_createtable(L, 0, 4);
     lua_rawseti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_FD_SUBS);
@@ -102,7 +98,7 @@ int async_pwait(lua_State *L) {
 static int loop_gc(lua_State *L) {
     ud_loop *loop = luaL_checkudata(L, 1, F_MT_LOOP);
 
-    if (unlikely(loop->fd == -1)) {
+    if (unlikely(loop->fd < 0)) {
         return 0;
     }
 
@@ -162,7 +158,7 @@ static int loop_yield(lua_State *L, lua_State *MAIN, int nres, int epfd) {
             EPOLL_WAIT_MAX_EVENTS,
             EPOLL_WAIT_TIMEOUT_MS);
 
-        if (unlikely(nfds == -1)) {
+        if (unlikely(nfds < 0)) {
             luaF_error_errno(L,
                 "epoll_wait failed; fd: %d; max events: %d; timeout ms: %d",
                 epfd,
@@ -222,7 +218,7 @@ static void loop_notify_fd_sub(
         return;
     }
 
-    if (unlikely(errmsg)) {
+    if (unlikely(errmsg != NULL)) {
         lua_pushinteger(sub, fd);
         lua_pushstring(sub, errmsg);
     } else {
@@ -236,8 +232,8 @@ static void loop_notify_fd_sub(
     if (unlikely(status == LUA_YIELD)) {
         lua_pop(sub, nres);
     } else {
-        lua_rawgeti(L, fd_subs_idx, fd); // rm if still the same
-        if (lua_topointer(L, -1) == sub) {
+        lua_rawgeti(L, fd_subs_idx, fd);
+        if (likely(lua_topointer(L, -1) == sub)) { // still the same
             lua_pushnil(L);
             lua_rawseti(L, fd_subs_idx, fd); // remove fd sub
         }
@@ -273,8 +269,7 @@ static int wait_yield(lua_State *L, int thread_idx) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS); // t_subs
     lua_pushvalue(L, thread_idx); // t_subs, T
 
-    if (unlikely(lua_rawget(L, -2) == LUA_TTABLE)) {
-        // T already has subscribers
+    if (unlikely(lua_rawget(L, -2) == LUA_TTABLE)) { // T already has subs
         lua_pushthread(L); // t_subs, subs, L
         lua_rawseti(L, -2, lua_rawlen(L, -2) + 1);
     } else { // T has no subs
@@ -287,7 +282,7 @@ static int wait_yield(lua_State *L, int thread_idx) {
 
     lua_settop(L, 1); // T
 
-    return lua_yieldk(L, 0, 0, wait_continue); // longjmp
+    return lua_yieldk(L, 0, 0, wait_continue);
 }
 
 static int wait_error(lua_State *L, lua_State *T, int status) {

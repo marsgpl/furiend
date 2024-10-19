@@ -34,6 +34,16 @@ cp src/lua /furiend/bin/
 cp src/luac /furiend/bin/
 ```
 
+## Redis
+
+```sh
+mkdir -p /furiend/vendor && cd /furiend/vendor
+wget https://download.redis.io/redis-stable.tar.gz
+tar -xvf redis-stable.tar.gz
+cd redis-stable
+make
+```
+
 ## yyjson
 
 ```sh
@@ -57,38 +67,32 @@ make
 
 ## TODO
 
-- http: server
-    - new lua thread on every request (pool? prob not)
-    - nobody subscribes to these threads but router tracks them
-    - wait for callback finish (callback can yield)
-- tgwh + validate secret key
-- provision fe2 ssh tunnel to develop locally
 - redis
-- http: crt verification
-- url
-- http: params: url, query
+- socket
+- fifo encryption
+- basic dc
+- ci
+
 - tgbot: hook custom crt + static ip
+- http serv: req pool
+- http serv: max clients
+- http serv: chunked
 - http: timeout
-- http: application/x-www-form-urlencoded
-- http: multipart/form-data
-- http: gzip
-- http: parse response len to preallocate buf
-- http: buffer pool to reuse
 - http: ip6
 - http: keep-alive
 - http: more validations
-- http: reuse ssl
-- http: multiple chunks
 - http: headers normalization
-- cookie
+- http req: crt verification
+- http req: params: url, query
+- http req: application/x-www-form-urlencoded
+- http req: multipart/form-data
+- http req: gzip
+- http req: check content-len, prealloc, rm if (0)
+- http req: buffer pool
+- http req: reuse ssl
+- http req: multiple chunks
+- cookies
 - dns: more types
 - dns: ip6
-- simplify async boilerplate
-- fs: file
-- fs: dir
-- fs: stat
-- tcp stream packet separation
-- socket
-- epoll
-- review libs
-- fe2 ci (build, pack, deploy)
+- socket: tcp + msg separation
+- fs: file, dir, stat

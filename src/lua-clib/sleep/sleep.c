@@ -28,7 +28,7 @@ static int sleep_start(lua_State *L) {
 
     lua_settop(L, 0);
 
-    return lua_yieldk(L, 0, 0, sleep_continue); // longjmp
+    return lua_yieldk(L, 0, 0, sleep_continue);
 }
 
 static int sleep_continue(lua_State *L, int status, lua_KContext ctx) {
@@ -42,7 +42,7 @@ static int sleep_continue(lua_State *L, int status, lua_KContext ctx) {
 
     int emask = lua_tointeger(L, F_LOOP_EMASK_REL_IDX);
 
-    if (emask_has_errors(emask)) {
+    if (unlikely(emask_has_errors(emask))) {
         luaF_error_socket(L, fd, emask_error_label(emask));
     }
 

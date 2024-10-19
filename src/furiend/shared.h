@@ -28,11 +28,10 @@
 #define F_RIDX_LOOP_T_SUBS 1003 // t_subs[thread] = { sub1, sub2, ... }
 
 #define F_GETSOCKOPT_FAILED -1 // see get_socket_error_code
-#define F_ERROR_NEW_UD "lua_newuserdatauv failed; mt: %s; user values: %d"
 
 #define inline __inline__
-#define likely(expr) __builtin_expect(!!(expr), 1)
-#define unlikely(expr) __builtin_expect(!!(expr), 0)
+#define likely(expr) __builtin_expect(expr, 1)
+#define unlikely(expr) __builtin_expect(expr, 0)
 
 typedef struct {
     int fd;
@@ -60,7 +59,7 @@ typedef struct {
 }
 
 #define luaF_loop_check_close(L) { \
-    if (lua_type(L, F_LOOP_ERRMSG_REL_IDX) == LUA_TSTRING) { \
+    if (unlikely(lua_type(L, F_LOOP_ERRMSG_REL_IDX) == LUA_TSTRING)) { \
         luaL_error(L, "loop.gc: %s", lua_tostring(L, F_LOOP_ERRMSG_REL_IDX)); \
     } \
 }
@@ -78,19 +77,25 @@ typedef struct {
 
 int get_socket_error_code(int fd);
 
+int parse_dec(char **pos);
+int parse_hex(char **pos);
+int uint_len(uint64_t num);
+
 void luaF_print_time(lua_State *L, FILE *stream);
 void luaF_print_value(lua_State *L, FILE *stream, int index);
 void luaF_print_string(lua_State *L, FILE *stream, int index);
 void luaF_trace(lua_State *L, const char *label);
 void luaF_need_args(lua_State *L, int need_args_n, const char *label);
+void luaF_min_max_args(lua_State *L, int min, int max, const char *label);
 void luaF_close_or_warning(lua_State *L, int fd);
 int luaF_set_timeout(lua_State *L, lua_Number duration_s);
 void luaF_push_error_socket(lua_State *L, int fd, const char *cause, int code);
 int luaF_error_socket(lua_State *L, int fd, const char *cause);
 lua_State *luaF_new_thread_or_error(lua_State *L);
+void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n);
 const char *luaF_status_label(int status);
-int luaF_loop_watch(lua_State *L);
-int luaF_loop_pwatch(lua_State *L, int fd, int emask, int sub_idx);
+int luaF_loop_watch(lua_State *L, int fd, int emask, int sub_idx);
+int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx);
 void luaF_loop_notify_t_subs(
     lua_State *L,
     lua_State *T,
