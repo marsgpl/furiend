@@ -39,7 +39,7 @@ int parse_dec(char **pos) {
     int result = 0;
     int digit = dec_to_int[(int)(**pos)];
 
-    while (likely(digit != -1)) {
+    while (digit != -1) {
         result = (result * 10) + digit;
         (*pos)++;
         digit = dec_to_int[(int)(**pos)];
@@ -52,7 +52,7 @@ int parse_hex(char **pos) {
     int result = 0;
     int digit = hex_to_int[(int)(**pos)];
 
-    while (likely(digit != -1)) {
+    while (digit != -1) {
         result = (result * 16) + digit;
         (*pos)++;
         digit = hex_to_int[(int)(**pos)];
@@ -476,4 +476,65 @@ void luaF_loop_notify_t_subs(
     }
 
     lua_pop(L, 1); // lua_rawget
+}
+
+const char *luaF_escape_string(
+    lua_State *L,
+    const char *buf,
+    int buf_len,
+    int max_len
+) {
+    int is_cropped = max_len > 0 && max_len < buf_len;
+    int hidden_n;
+    int suffix_len;
+    int len;
+    int esc_size;
+
+    if (is_cropped) {
+        hidden_n = buf_len - max_len;
+        suffix_len = strlen(F_ESC_STR_SUFFIX) - 2 + uint_len(hidden_n);
+        len = max_len;
+        esc_size = max_len * 4 + suffix_len + 1; // +1 for nul
+    } else {
+        len = buf_len;
+        esc_size = buf_len * 4 + 1; // +1 for nul
+    }
+
+    char *esc = malloc(esc_size);
+    int i = 0; // index in esc
+
+    if (unlikely(esc == NULL)) {
+        luaL_error(L, "malloc failed: %d", esc_size);
+    }
+
+    for (int buf_i = 0; buf_i < len; ++buf_i) {
+        unsigned char c = buf[buf_i];
+
+        switch (c) {
+            case '\r': esc[i++] = '\\'; esc[i++] = 'r'; break;
+            case '\n': esc[i++] = '\\'; esc[i++] = 'n'; break;
+            case '\t': esc[i++] = '\\'; esc[i++] = 't'; break;
+            case '\\': esc[i++] = '\\'; esc[i++] = '\\'; break;
+            case '"': esc[i++] = '\\'; esc[i++] = '"'; break;
+            default:
+                if (unlikely(c < 32 || c >= 127)) {
+                    sprintf(esc + i, "\\x%X%X", (c >> 4) % 16, c % 16);
+                    i += 4;
+                } else {
+                    esc[i++] = c;
+                }
+        }
+    }
+
+    if (is_cropped) {
+        sprintf(esc + i, F_ESC_STR_SUFFIX, hidden_n);
+        i += suffix_len;
+    }
+
+    esc[i] = '\0';
+
+    lua_pushstring(L, esc);
+    free(esc);
+
+    return lua_tostring(L, -1);
 }

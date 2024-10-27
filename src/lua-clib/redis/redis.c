@@ -8,7 +8,29 @@ LUAMOD_API int luaopen_redis(lua_State *L) {
         lua_setfield(L, -2, "__gc");
     }
 
-    luaL_newlib(L, redis_index);
+    lua_createtable(L, 0, 2);
+
+    lua_pushcfunction(L, redis_client);
+    lua_setfield(L, -2, "client");
+
+    lua_createtable(L, 0, 15);
+        luaF_set_kv_int(L, -1, "STR", RESP_STR);
+        luaF_set_kv_int(L, -1, "ERR", RESP_ERR);
+        luaF_set_kv_int(L, -1, "INT", RESP_INT);
+        luaF_set_kv_int(L, -1, "BULK", RESP_BULK);
+        luaF_set_kv_int(L, -1, "ARR", RESP_ARR);
+        luaF_set_kv_int(L, -1, "NULL", RESP_NULL);
+        luaF_set_kv_int(L, -1, "BOOL", RESP_BOOL);
+        luaF_set_kv_int(L, -1, "DOUBLE", RESP_DOUBLE);
+        luaF_set_kv_int(L, -1, "BIG_NUM", RESP_BIG_NUM);
+        luaF_set_kv_int(L, -1, "BULK_ERR", RESP_BULK_ERR);
+        luaF_set_kv_int(L, -1, "VSTR", RESP_VSTR);
+        luaF_set_kv_int(L, -1, "MAP", RESP_MAP);
+        luaF_set_kv_int(L, -1, "AGGR", RESP_ATTR);
+        luaF_set_kv_int(L, -1, "SET", RESP_SET);
+        luaF_set_kv_int(L, -1, "PUSH", RESP_PUSH);
+    lua_setfield(L, -2, "type");
+
     return 1;
 }
 
@@ -17,16 +39,29 @@ int redis_client(lua_State *L) {
     luaL_checktype(L, 1, LUA_TTABLE);
 
     ud_redis_client *client = luaF_new_uduv_or_error(L,
-        sizeof(ud_redis_client), 2);
+        sizeof(ud_redis_client), 3);
 
     client->fd = -1;
     client->connected = 0;
     client->can_write = 0;
+    client->next_query_id = 1;
+    client->next_answer_id = 1;
+
+    client->recv_buf = malloc(READ_BUF_START_SIZE);
+    client->recv_buf_len = 0;
+    client->recv_buf_size = READ_BUF_START_SIZE;
+
+    if (unlikely(client->recv_buf == NULL)) {
+        luaF_error_errno(L, "malloc failed: %d", READ_BUF_START_SIZE);
+    }
 
     luaL_setmetatable(L, MT_REDIS_CLIENT);
 
     lua_insert(L, 1); // config, client -> client, config
     lua_setiuservalue(L, 1, REDIS_UDUVIDX_CONFIG);
+
+    lua_createtable(L, 0, 8); // expect 8 queries at once
+    lua_setiuservalue(L, 1, REDIS_UDUVIDX_Q_SUBS);
 
     return 1;
 }
@@ -34,9 +69,43 @@ int redis_client(lua_State *L) {
 int redis_client_gc(lua_State *L) {
     ud_redis_client *client = luaL_checkudata(L, 1, MT_REDIS_CLIENT);
 
-    if (client->fd != -1) {
-        luaF_close_or_warning(L, client->fd);
-        client->fd = -1;
+    if (client->recv_buf != NULL) {
+        free(client->recv_buf);
+        client->recv_buf = NULL;
+    }
+
+    if (unlikely(client->fd < 0)) {
+        return 0;
+    }
+
+    luaF_close_or_warning(L, client->fd);
+    client->fd = -1;
+
+    lua_settop(L, 2); // client, error msg or nil
+    lua_getiuservalue(L, 1, REDIS_UDUVIDX_Q_SUBS);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
+
+    int q_subs_idx = 3;
+    int t_subs_idx = 4;
+
+    lua_pushnil(L);
+    while (lua_next(L, q_subs_idx)) {
+        int sub_idx = lua_gettop(L);
+        lua_State *sub = lua_tothread(L, sub_idx);
+
+        lua_pushboolean(sub, 0);
+        lua_pushstring(sub, lua_isstring(L, 2)
+            ? lua_tostring(L, 2) // gc called from router
+            : "redis.client.gc called");
+        lua_pushinteger(sub, 0); // fake type
+
+        int sub_nres;
+        int sub_status = lua_resume(sub, L, 3, &sub_nres); // shouldn't yield
+
+        luaF_loop_notify_t_subs(L, t_subs_idx,
+            sub, sub_idx, sub_status, sub_nres);
+
+        lua_pop(L, 1); // lua_next
     }
 
     return 0;
@@ -74,20 +143,6 @@ int redis_connect(lua_State *L) {
     lua_settop(L, 2); // client, T, router -> client, T
 
     return 1; // T
-}
-
-int redis_ping(lua_State *L) {
-    luaF_need_args(L, 1, "ping");
-
-    lua_State *T = luaF_new_thread_or_error(L);
-    lua_insert(L, 1); // client, T -> T, client
-    lua_pushcfunction(T, ping_start);
-    lua_xmove(L, T, 1); // client >> T
-
-    int nres;
-    lua_resume(T, L, 1, &nres); // should yield, 0 nres
-
-    return 1;
 }
 
 static int connect_start(lua_State *L) {
@@ -202,6 +257,8 @@ static int router_process_event(lua_State *L) {
     int t_subs_idx = lua_gettop(L);
 
     if (emask & EPOLLOUT) {
+        client->can_write = 1;
+
         if (unlikely(!client->connected)) {
             lua_getiuservalue(L, 1, REDIS_UDUVIDX_CONN_THREAD);
             int sub_idx = lua_gettop(L);
@@ -224,26 +281,171 @@ static int router_process_event(lua_State *L) {
     }
 
     if (emask & EPOLLIN) {
+        router_read(L, client, t_subs_idx);
     }
 
     return 0;
 }
 
-static int ping_start(lua_State *L) {
+static void router_read(lua_State *L, ud_redis_client *client, int t_subs_idx) {
+    int fd = client->fd;
+    char *buf = client->recv_buf;
+    int len = client->recv_buf_len;
+    int size = client->recv_buf_size;
+
+    while (1) {
+        if (unlikely(size - len < READ_BUF_MIN_SIZE)) {
+            luaL_error(L, "TODO: resize recv buf");
+        }
+
+        ssize_t read = recv(fd, buf + len, size - len, 0);
+
+        if (unlikely(read == 0)) {
+            luaL_error(L, "server dropped out during client read");
+        } else if (read < 0) {
+            if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
+                luaF_error_errno(L, "recv failed; fd: %d", fd);
+            }
+            break;
+        }
+
+        len += read;
+    }
+
+    if (unlikely(client->recv_buf_len == len)) {
+        return; // did not get new bytes, no need to parse again
+    }
+
+    lua_getiuservalue(L, 1, REDIS_UDUVIDX_Q_SUBS);
+    int q_subs_idx = lua_gettop(L);
+
+    int total_parsed = 0;
+
+    while (len - total_parsed > 2) {
+        int parsed = resp_unpack(L, buf + total_parsed, len - total_parsed, 1);
+
+        if (unlikely(parsed == 0)) {
+            break; // not enough data, wait for more
+        }
+
+        total_parsed += parsed;
+
+        int answer_id = client->next_answer_id++;
+        int type = lua_rawgeti(L, q_subs_idx, answer_id);
+
+        if (unlikely(type != LUA_TTHREAD)) {
+            luaL_error(L, "query thread not found by id: %d", answer_id);
+        }
+
+        lua_pushnil(L);
+        lua_rawseti(L, q_subs_idx, answer_id);
+
+        int sub_idx = lua_gettop(L) - 2;
+        lua_insert(L, sub_idx); // data, type, sub -> sub, data, type
+        lua_State *sub = lua_tothread(L, sub_idx);
+
+        lua_pushboolean(sub, 1);
+        lua_xmove(L, sub, 2); // data, type >> sub
+
+        int sub_nres;
+        int sub_status = lua_resume(sub, L, 3, &sub_nres); // doesn't yield
+
+        luaF_loop_notify_t_subs(L, t_subs_idx,
+            sub, sub_idx, sub_status, sub_nres);
+
+        lua_pop(L, 1); // lua_rawgeti
+    }
+
+    client->recv_buf_len = len - total_parsed;
+
+    if (unlikely(total_parsed > 0 && total_parsed < len)) {
+        memmove(client->recv_buf,
+            client->recv_buf + total_parsed,
+            client->recv_buf_len);
+    }
+}
+
+int redis_query(lua_State *L) {
+    luaF_need_args(L, 2, "query");
+    luaL_checktype(L, 2, LUA_TSTRING);
+
+    lua_State *T = luaF_new_thread_or_error(L);
+
+    lua_insert(L, 1); // client, query, T -> T, client, query
+    lua_pushcfunction(T, query_start);
+    lua_xmove(L, T, 2); // client, query >> T
+
+    int nres;
+    lua_resume(T, L, 2, &nres); // should yield, 0 nres
+
+    return 1;
+}
+
+static int query_start(lua_State *L) {
     ud_redis_client *client = luaL_checkudata(L, 1, MT_REDIS_CLIENT);
+    size_t query_len;
+    const char *query = lua_tolstring(L, 2, &query_len);
 
     if (unlikely(!client->connected)) {
         luaL_error(L, "not connected");
     }
 
-    (void)ping_continue;
+    if (unlikely(query_len < 3)) {
+        luaL_error(L, "query is too small: %d; min: %d", query_len, 3);
+    }
 
-    return 0;
+    if (query[query_len - 2] != '\r' || query[query_len - 1] != '\n') {
+        luaL_error(L, "query should end with \\r\\n");
+    }
+
+    if (likely(client->can_write)) {
+        while (query_len > 0) {
+            ssize_t sent = send(client->fd, query, query_len, MSG_NOSIGNAL);
+
+            if (unlikely(sent == 0)) {
+                luaL_error(L, "server dropped out during client send");
+            } else if (sent < 0) {
+                if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
+                    luaF_error_errno(L, "query failed");
+                }
+
+                client->can_write = 0;
+
+                break; // try again later
+            }
+
+            query += sent;
+            query_len -= sent;
+        }
+    }
+
+    if (unlikely(query_len > 0)) {
+        luaL_error(L, "TODO: redis client send buf: append; can_write: %d; query_len: %d", client->can_write, query_len);
+    }
+
+    int query_id = client->next_query_id++;
+
+    lua_getiuservalue(L, 1, REDIS_UDUVIDX_Q_SUBS);
+    lua_pushthread(L);
+    lua_rawseti(L, -2, query_id);
+
+    lua_settop(L, 1);
+
+    return lua_yieldk(L, 0, 0, query_continue);
 }
 
-static int ping_continue(lua_State *L, int status, lua_KContext ctx) {
-    (void)status;
+static int query_continue(lua_State *L, int status, lua_KContext ctx) {
     (void)ctx;
-    (void)L;
-    return 0;
+    (void)status;
+
+    if (
+        lua_toboolean(L, -3) == 0 || // communication error
+        lua_tointeger(L, -1) == RESP_ERR ||
+        lua_tointeger(L, -1) == RESP_BULK_ERR
+    ) {
+        lua_pop(L, 1); // type
+        lua_error(L); // -1 = err msg
+    }
+
+    return 2; // type, response
 }

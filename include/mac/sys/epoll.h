@@ -6,6 +6,10 @@
 
 #define SOCK_NONBLOCK 0
 
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
 #define EPOLLIN 0
 #define EPOLLPRI 0
 #define EPOLLOUT 0

@@ -26,6 +26,7 @@ int http_request(lua_State *L) {
     luaL_checktype(L, 1, LUA_TTABLE); // conf
 
     lua_State *T = luaF_new_thread_or_error(L);
+
     lua_insert(L, 1); // conf, T -> T, conf
     lua_pushcfunction(T, request_start);
     lua_xmove(L, T, 1); // conf >> T

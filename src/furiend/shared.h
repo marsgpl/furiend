@@ -15,6 +15,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <lauxlib.h>
+#include <assert.h>
+
+static_assert(sizeof(char) == 1, "sizeof(char) is not 1");
 
 #define F_MT_LOOP "loop*"
 
@@ -30,6 +33,8 @@
 #define F_RIDX_LOOP_T_SUBS 1003 // t_subs[thread] = { sub1, sub2, ... }
 
 #define F_GETSOCKOPT_FAILED -1 // see get_socket_error_code
+
+#define F_ESC_STR_SUFFIX " ... (%d more)"
 
 #define inline __inline__
 #define likely(expr) __builtin_expect(expr, 1)
@@ -101,6 +106,11 @@ void luaF_set_ip4_port(
 lua_State *luaF_new_thread_or_error(lua_State *L);
 void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n);
 const char *luaF_status_label(int status);
+const char *luaF_escape_string(
+    lua_State *L,
+    const char *buf,
+    int buf_len,
+    int max_len);
 int luaF_loop_watch(lua_State *L, int fd, int emask, int sub_idx);
 int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx);
 void luaF_loop_notify_t_subs(

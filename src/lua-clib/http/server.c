@@ -69,6 +69,7 @@ int http_serv_listen(lua_State *L) {
     luaL_checkudata(L, 1, MT_HTTP_SERV);
 
     lua_State *T = luaF_new_thread_or_error(L);
+
     lua_insert(L, 1); // serv, T -> T, serv
     lua_pushcfunction(T, listen_start);
     lua_xmove(L, T, 1); // serv >> T
@@ -419,7 +420,7 @@ static int client_process_read(lua_State *L) {
 }
 
 static void client_read(lua_State *L, ud_http_serv_client *client) {
-    while (likely(!client->body_ready)) {
+    while (!client->body_ready) {
         if (unlikely(client->req_len >= client->req_size)) {
             luaL_error(L, "request headers are too big: %d", client->req_len);
         }
@@ -430,7 +431,7 @@ static void client_read(lua_State *L, ud_http_serv_client *client) {
             0);
 
         if (unlikely(read == 0)) {
-            luaL_error(L, "client disconnected");
+            luaL_error(L, "client dropped the connection");
         } else if (read < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
                 luaF_error_errno(L, "recv failed; fd: %d", client->fd);
@@ -662,7 +663,7 @@ static int client_process_write(lua_State *L, ud_http_serv_client *client) {
             MSG_NOSIGNAL);
 
         if (unlikely(sent == 0)) {
-            luaF_warning_errno(L, "http response headers send failed; sent: 0");
+            luaF_warning_errno(L, "client dropped out during http server send");
             return 1; // writing done
         } else if (sent < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
@@ -682,7 +683,7 @@ static int client_process_write(lua_State *L, ud_http_serv_client *client) {
             MSG_NOSIGNAL);
 
         if (unlikely(sent == 0)) {
-            luaF_warning_errno(L, "http response body send failed; sent: 0");
+            luaF_warning_errno(L, "client dropped out during http server send");
             return 1; // writing done
         } else if (sent < 0) {
             if (unlikely(errno != EAGAIN && errno != EWOULDBLOCK)) {
