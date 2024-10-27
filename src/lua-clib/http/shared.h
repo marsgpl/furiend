@@ -2,8 +2,6 @@
 #define LUA_LIB_HTTP_SHARED_H
 
 #include <strings.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <furiend/shared.h>

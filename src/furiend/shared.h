@@ -12,6 +12,8 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/timerfd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <lauxlib.h>
 
 #define F_MT_LOOP "loop*"
@@ -91,6 +93,11 @@ void luaF_close_or_warning(lua_State *L, int fd);
 int luaF_set_timeout(lua_State *L, lua_Number duration_s);
 void luaF_push_error_socket(lua_State *L, int fd, const char *cause, int code);
 int luaF_error_socket(lua_State *L, int fd, const char *cause);
+void luaF_set_ip4_port(
+    lua_State *L,
+    struct sockaddr_in *sa,
+    const char *ip4,
+    int port);
 lua_State *luaF_new_thread_or_error(lua_State *L);
 void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n);
 const char *luaF_status_label(int status);
@@ -98,10 +105,11 @@ int luaF_loop_watch(lua_State *L, int fd, int emask, int sub_idx);
 int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx);
 void luaF_loop_notify_t_subs(
     lua_State *L,
-    lua_State *T,
     int t_subs_idx,
-    int status,
-    int nres);
+    lua_State *T,
+    int t_idx,
+    int t_status,
+    int t_nres);
 
 #endif
 

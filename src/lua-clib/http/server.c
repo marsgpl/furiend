@@ -175,20 +175,9 @@ static int listen_start(lua_State *L) {
 
     int status;
     http_serv_conf *conf = &(serv->conf);
+
     struct sockaddr_in sa = {0};
-
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(conf->port);
-
-    status = inet_pton(AF_INET, conf->ip4, &sa.sin_addr);
-
-    if (unlikely(status == 0)) { // invalid format
-        luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
-            AF_INET, conf->ip4);
-    } else if (unlikely(status != 1)) { // other errors
-        luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
-            AF_INET, conf->ip4);
-    }
+    luaF_set_ip4_port(L, &sa, conf->ip4, conf->port);
 
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
@@ -245,8 +234,8 @@ static int listen_continue(lua_State *L, int status, lua_KContext ctx) {
 }
 
 static void listen_accept(lua_State *L, ud_http_serv *serv) {
-    static char ip4[INET_ADDRSTRLEN];
-    static struct sockaddr_in sa;
+    char ip4[INET_ADDRSTRLEN];
+    struct sockaddr_in sa;
     socklen_t len = sizeof(sa);
 
     while (1) {
@@ -499,10 +488,8 @@ static void client_parse_headers(lua_State *L, ud_http_serv_client *client) {
 
     client->req[client->req_len] = '\0';
 
-    static headers_parser_state state;
-    static req_headline hline;
-
-    memset(&hline, 0, sizeof(req_headline));
+    headers_parser_state state;
+    req_headline hline = {0};
 
     state.line = client->req;
     state.rest_len = client->req_len;

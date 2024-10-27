@@ -16,8 +16,8 @@ int sha512(lua_State *L) {
         luaL_error(L, "input is too long");
     }
 
-    static uint64_t hash[8];
-    static char hex[128 + 1]; // 1 for sprintf nul byte
+    uint64_t hash[8];
+    char hex[128 + 1]; // 1 for sprintf nul byte
 
     int is_ok = sha512_hash((const uint8_t *)input, len, hash);
 
@@ -73,7 +73,7 @@ static int sha512_hash(const uint8_t *input, size_t len, uint64_t *hash) {
 
     for (uint64_t ci = 0; ci < chunks_n; ++ci) {
         uint8_t *chunk = (uint8_t *)(msg + ci * 128);
-        static uint64_t w[80];
+        uint64_t w[80];
 
         memcpy(w, chunk, 128); // w[0..15]
 

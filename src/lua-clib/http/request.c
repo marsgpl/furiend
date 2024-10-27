@@ -76,22 +76,12 @@ static int request_start(lua_State *L) {
     parse_conf(L, req, 1);
     check_conf(L, req);
 
-    int status;
     http_request_conf *conf = &(req->conf);
+    const char *ip4 = conf->ip4;
+    int port = conf->port;
+
     struct sockaddr_in sa = {0};
-
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(conf->port);
-
-    status = inet_pton(AF_INET, conf->ip4, &sa.sin_addr);
-
-    if (unlikely(status == 0)) { // invalid format
-        luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
-            AF_INET, conf->ip4);
-    } else if (unlikely(status != 1)) { // other errors
-        luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
-            AF_INET, conf->ip4);
-    }
+    luaF_set_ip4_port(L, &sa, ip4, port);
 
     int fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 
@@ -106,14 +96,12 @@ static int request_start(lua_State *L) {
 
     build_headers(L, req);
 
-    status = connect(fd, (struct sockaddr *)&sa, sizeof(sa));
+    int status = connect(fd, (struct sockaddr *)&sa, sizeof(sa));
 
-    if (status != -1) {
-        luaF_error_errno(L, "connected immediately; addr: %s:%d",
-            conf->ip4, conf->port);
+    if (unlikely(status != -1)) {
+        luaF_error_errno(L, "connected immediately; addr: %s:%d", ip4, port);
     } else if (errno != EINPROGRESS) {
-        luaF_error_errno(L, "connect failed; addr: %s:%d",
-            conf->ip4, conf->port);
+        luaF_error_errno(L, "connect failed; addr: %s:%d", ip4, port);
     }
 
     luaF_loop_watch(L, fd, EPOLLIN | EPOLLOUT | EPOLLET, 0);
@@ -426,10 +414,8 @@ static int request_finish(lua_State *L, ud_http_request *req) {
 
     req->response[req->response_len] = '\0'; // extra byte was reserved
 
-    static headers_parser_state state;
-    static res_headline hline;
-
-    memset(&hline, 0, sizeof(res_headline));
+    headers_parser_state state;
+    res_headline hline = {0};
 
     state.line = req->response;
     state.rest_len = req->response_len;

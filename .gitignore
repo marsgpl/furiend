@@ -1,7 +1,10 @@
-/bin/lua
-/bin/luac
+/bin/lua*
+/bin/redis*
+
+/data
 /vendor
 /include/vendor
+
 *.o
 *.so
 *.luac

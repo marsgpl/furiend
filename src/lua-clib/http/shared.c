@@ -247,7 +247,7 @@ int ssl_error_verify(lua_State *L, long result) {
 int ssl_warn_err_stack(lua_State *L) {
     int errors_n = 0;
     unsigned long error_code;
-    static char error_msg[256];
+    char error_msg[256];
 
     while ((error_code = ERR_get_error()) != 0) {
         errors_n++;

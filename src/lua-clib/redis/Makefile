@@ -21,6 +21,6 @@ $(NAME).so: $(NAME).o resp.o $(FU_SRC)/furiend/shared.o
 	$(CC) $(CCFLAGS) -o $@ $< $(INCS)
 
 $(NAME).o: $(NAME).c $(NAME).h resp.h $(FU_SRC)/furiend/shared.h
-resp.o: resp.c resp.h
+resp.o: resp.c resp.h $(FU_SRC)/furiend/shared.h
 
 .PHONY: build clean

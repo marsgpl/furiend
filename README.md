@@ -11,12 +11,14 @@ docker network create \
 docker builder build --tag furiend:latest docker
 
 ./shell
+./redis
 
 docker network ls
 docker image ls -a
 docker container ls
 
-docker container rm furiend_shell
+docker container stop furiend_shell furiend_redis
+docker container rm furiend_shell furiend_redis
 docker image rm furiend
 docker network rm furiend
 ```
@@ -41,7 +43,16 @@ mkdir -p /furiend/vendor && cd /furiend/vendor
 wget https://download.redis.io/redis-stable.tar.gz
 tar -xvf redis-stable.tar.gz
 cd redis-stable
-make
+make test
+mkdir -p /furiend/bin
+cp src/redis-cli /furiend/bin/
+cp src/redis-server /furiend/bin/
+cp src/redis-sentinel /furiend/bin/
+mkdir -p /furiend/data
+```
+
+```sh
+REDISCLI_AUTH=LocalPassword123 redis-cli -u redis://redis:30303/0
 ```
 
 ## yyjson
@@ -67,11 +78,11 @@ make
 
 ## TODO
 
-- redis
 - socket
 - fifo encryption
 - basic dc
 - ci
+- inet_pton macro
 
 - tgbot: hook custom crt + static ip
 - http serv: req pool

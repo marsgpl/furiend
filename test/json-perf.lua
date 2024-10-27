@@ -4,7 +4,7 @@ local perf = require "test.perf"
 local cjson = require "cjson"
 local json = require "json"
 
-local string = [[
+local test_json = [[
 {
     "glossary": {
         "title": "example glossary",
@@ -29,37 +29,37 @@ local string = [[
 }
 ]]
 
-local value = json.parse(string)
-
--- trace(json.stringify(value))
--- trace(cjson.encode(value))
--- trace(json.parse(string))
--- trace(cjson.decode(string))
-
-local reps = 250000
-
 return function()
+    local string = test_json
+    local value = json.parse(string)
+
+    local reps = 250000
+    local json_stringify = json.stringify
+    local json_parse = json.parse
+    local cjson_encode = cjson.encode
+    local cjson_decode = cjson.decode
+
     perf()
         for _ = 1, reps do
-            assert(json.stringify(value))
+            json_stringify(value)
         end
     perf("stringify: yyjson")
 
     perf()
         for _ = 1, reps do
-            assert(cjson.encode(value))
+            cjson_encode(value)
         end
     perf("stringify: cjson")
 
     perf()
         for _ = 1, reps do
-            assert(json.parse(string))
+            json_parse(string)
         end
     perf("parse: yyjson")
 
     perf()
         for _ = 1, reps do
-            assert(cjson.decode(string))
+            cjson_decode(string)
         end
     perf("parse: cjson")
 end

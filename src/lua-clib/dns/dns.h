@@ -1,8 +1,6 @@
 #ifndef LUA_LIB_DNS_H
 #define LUA_LIB_DNS_H
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <sys/types.h>
 #include <furiend/shared.h>
 
@@ -30,6 +28,7 @@
 
 #define DNS_UDUVIDX_ID_SUBS 1
 #define DNS_UDUVIDX_SEND_QUEUE 2
+#define DNS_UDUVIDX_ROUTER 3
 
 #define parse_uint16(buf) ntohs(((buf)[0]) | (((buf)[1]) << 8))
 #define parse_uint32(buf) ntohl(*(uint32_t *)(buf))

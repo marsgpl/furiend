@@ -6,14 +6,12 @@ local wait = async.wait
 
 return function()
     perf()
-        local ip4 = "127.0.0.1"
-        local port = 18001
-
         local client = redis.client {
-            ip4 = ip4,
-            port = port,
+            ip4 = "172.20.0.3",
+            port = 30303,
         }
 
+        wait(client:connect())
         wait(client:ping())
 
         client:close()

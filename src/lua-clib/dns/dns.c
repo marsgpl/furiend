@@ -148,29 +148,16 @@ static int dns_client(lua_State *L) {
 
     int status, nres;
 
-    ud_dns_client *client = luaF_new_uduv_or_error(L,
-        sizeof(ud_dns_client), 2);
+    ud_dns_client *client = luaF_new_uduv_or_error(L, sizeof(ud_dns_client), 2);
 
-    lua_createtable(L, 0, 1);
+    lua_createtable(L, 0, 2);
     lua_setiuservalue(L, -2, DNS_UDUVIDX_ID_SUBS);
 
-    lua_createtable(L, 1, 0);
+    lua_createtable(L, 2, 0);
     lua_setiuservalue(L, -2, DNS_UDUVIDX_SEND_QUEUE);
 
     struct sockaddr_in sa = {0};
-
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(port);
-
-    status = inet_pton(AF_INET, ip4, &sa.sin_addr);
-
-    if (unlikely(status == 0)) { // invalid format
-        luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
-            AF_INET, ip4);
-    } else if (unlikely(status != 1)) { // other errors
-        luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
-            AF_INET, ip4);
-    }
+    luaF_set_ip4_port(L, &sa, ip4, port);
 
     int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, IPPROTO_UDP);
 
@@ -190,7 +177,7 @@ static int dns_client(lua_State *L) {
     client->parallel = parallel;
     client->tmt = tmt;
     client->queued_n = 0;
-    client->next_id = 0;
+    client->next_id = 1;
 
     luaL_setmetatable(L, MT_DNS_CLIENT);
 
@@ -233,17 +220,19 @@ static int dns_client_gc(lua_State *L) {
 
     lua_pushnil(L);
     while (lua_next(L, id_subs_idx)) {
-        lua_State *sub = lua_tothread(L, -1);
+        int sub_idx = lua_gettop(L);
+        lua_State *sub = lua_tothread(L, sub_idx);
 
         lua_pushboolean(sub, 0);
         lua_pushstring(sub, lua_isstring(L, 2)
             ? lua_tostring(L, 2) // gc called from router
             : "dns.client.gc called");
 
-        int nres;
-        int status = lua_resume(sub, L, 2, &nres); // shouldn't yield
+        int sub_nres;
+        int sub_status = lua_resume(sub, L, 2, &sub_nres); // shouldn't yield
 
-        luaF_loop_notify_t_subs(L, sub, t_subs_idx, status, nres);
+        luaF_loop_notify_t_subs(L, t_subs_idx,
+            sub, sub_idx, sub_status, sub_nres);
 
         lua_pop(L, 1); // lua_next
     }
@@ -254,8 +243,7 @@ static int dns_client_gc(lua_State *L) {
 static int dns_router(lua_State *L) {
     ud_dns_client *client = lua_touserdata(L, 1);
 
-    int emask = EPOLLIN | EPOLLOUT | EPOLLET;
-    luaF_loop_watch(L, client->fd, emask, 0);
+    luaF_loop_watch(L, client->fd, EPOLLIN | EPOLLOUT | EPOLLET, 0);
 
     return lua_yieldk(L, 0, 0, dns_router_continue);
 }
@@ -343,14 +331,16 @@ static void dns_router_read(lua_State *L, ud_dns_client *client) {
 
             client->buf_len = len;
 
-            lua_State *sub = lua_tothread(L, -1);
+            int sub_idx = lua_gettop(L);
+            lua_State *sub = lua_tothread(L, sub_idx);
 
             lua_pushboolean(sub, 1);
 
-            int nres;
-            int status = lua_resume(sub, L, 1, &nres); // shouldn't yield
+            int sub_nres;
+            int sub_status = lua_resume(sub, L, 1, &sub_nres); // doesn't yield
 
-            luaF_loop_notify_t_subs(L, sub, t_subs_idx, status, nres);
+            luaF_loop_notify_t_subs(L, t_subs_idx,
+                sub, sub_idx, sub_status, sub_nres);
         } else {
             luaF_warning(L, "dns sub not found; req id: %d", req_id);
         }

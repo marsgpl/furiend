@@ -1,6 +1,6 @@
 #!/bin/sh
 
-NAME=furiend_shell
+NAME=furiend_redis
 RUNNING=$(docker container list --filter name=$NAME --quiet)
 STOPPED=$(docker container list --all --filter name=$NAME --quiet)
 
@@ -17,14 +17,15 @@ else # not created
         --interactive \
         --name $NAME \
         --network furiend \
-        --hostname shell \
-        --ip 172.20.0.2 \
-        --publish 127.0.0.1:19001:19001 \
+        --hostname redis \
+        --ip 172.20.0.3 \
+        --publish 127.0.0.1:30303:30303 \
         --env ENV=/root/.profile \
         --workdir /furiend \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \
-        --entrypoint /bin/sh \
-        furiend
+        --entrypoint /furiend/bin/redis-server \
+        furiend \
+        /furiend/docker/redis.conf
 fi

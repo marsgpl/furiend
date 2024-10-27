@@ -299,6 +299,26 @@ int luaF_error_socket(lua_State *L, int fd, const char *cause) {
     return lua_error(L);
 }
 
+void luaF_set_ip4_port(
+    lua_State *L,
+    struct sockaddr_in *sa,
+    const char *ip4,
+    int port
+) {
+    sa->sin_family = AF_INET;
+    sa->sin_port = htons(port);
+
+    int status = inet_pton(AF_INET, ip4, &sa->sin_addr);
+
+    if (unlikely(status == 0)) { // invalid format
+        luaL_error(L, "inet_pton: invalid address format; af: %d; address: %s",
+            AF_INET, ip4);
+    } else if (unlikely(status != 1)) { // other errors
+        luaF_error_errno(L, "inet_pton failed; af: %d; address: %s",
+            AF_INET, ip4);
+    }
+}
+
 lua_State *luaF_new_thread_or_error(lua_State *L) {
     lua_State *T = lua_newthread(L);
 
@@ -409,44 +429,47 @@ int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx) {
 
 void luaF_loop_notify_t_subs(
     lua_State *L,
-    lua_State *T,
     int t_subs_idx,
-    int status,
-    int nres
+    lua_State *T,
+    int t_idx,
+    int t_status,
+    int t_nres
 ) {
-    lua_pushvalue(L, -1);
+    lua_pushvalue(L, t_idx);
     if (unlikely(lua_rawget(L, t_subs_idx) != LUA_TTABLE)) { // no subs
         lua_pop(L, 1); // lua_rawget
         return;
     }
 
-    lua_pushvalue(L, -2);
+    lua_pushvalue(L, t_idx);
     lua_pushnil(L);
-    lua_rawset(L, t_subs_idx); // t_subs[thread] = nil
+    lua_rawset(L, t_subs_idx); // t_subs[T] = nil
 
     luaL_checkstack(L, 4, "notify subs L");
-    luaL_checkstack(T, nres, "notify subs T");
+    luaL_checkstack(T, t_nres, "notify subs T");
 
     lua_pushnil(L);
     while (lua_next(L, -2)) {
-        lua_State *sub = lua_tothread(L, -1);
+        int sub_idx = lua_gettop(L);
+        lua_State *sub = lua_tothread(L, sub_idx);
 
-        luaL_checkstack(sub, nres + 1, "notify subs sub");
-        lua_pushinteger(sub, status);
+        luaL_checkstack(sub, t_nres + 1, "notify subs sub");
+        lua_pushinteger(sub, t_status);
 
-        for (int index = 1; index <= nres; ++index) {
+        for (int index = 1; index <= t_nres; ++index) {
             lua_pushvalue(T, index);
         }
 
-        lua_xmove(T, sub, nres);
+        lua_xmove(T, sub, t_nres);
 
         int sub_nres;
-        int sub_status = lua_resume(sub, L, nres + 1, &sub_nres);
+        int sub_status = lua_resume(sub, L, t_nres + 1, &sub_nres);
 
-        if (unlikely(status == LUA_YIELD)) {
+        if (unlikely(sub_status == LUA_YIELD)) {
             lua_pop(sub, sub_nres);
         } else {
-            luaF_loop_notify_t_subs(L, sub, t_subs_idx, sub_status, sub_nres);
+            luaF_loop_notify_t_subs(L, t_subs_idx,
+                sub, sub_idx, sub_status, sub_nres);
         }
 
         lua_pop(L, 1); // lua_next

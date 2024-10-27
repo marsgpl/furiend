@@ -209,7 +209,8 @@ static void loop_notify_fd_sub(
         return;
     }
 
-    lua_State *sub = lua_tothread(L, -1);
+    int sub_idx = lua_gettop(L);
+    lua_State *sub = lua_tothread(L, sub_idx);
 
     if (unlikely(!lua_isyieldable(sub))) { // thread died, do not notify
         lua_pushnil(L);
@@ -226,11 +227,11 @@ static void loop_notify_fd_sub(
         lua_pushinteger(sub, emask);
     }
 
-    int nres;
-    int status = lua_resume(sub, L, 2, &nres);
+    int sub_nres;
+    int sub_status = lua_resume(sub, L, 2, &sub_nres);
 
-    if (unlikely(status == LUA_YIELD)) {
-        lua_pop(sub, nres);
+    if (unlikely(sub_status == LUA_YIELD)) {
+        lua_pop(sub, sub_nres);
     } else {
         lua_rawgeti(L, fd_subs_idx, fd);
         if (likely(lua_topointer(L, -1) == sub)) { // still the same
@@ -238,7 +239,8 @@ static void loop_notify_fd_sub(
             lua_rawseti(L, fd_subs_idx, fd); // remove fd sub
         }
         lua_pop(L, 1); // lua_rawgeti
-        luaF_loop_notify_t_subs(L, sub, t_subs_idx, status, nres);
+        luaF_loop_notify_t_subs(L, t_subs_idx,
+            sub, sub_idx, sub_status, sub_nres);
     }
 
     lua_pop(L, 1); // lua_rawgeti

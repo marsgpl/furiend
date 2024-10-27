@@ -14,7 +14,7 @@ build: $(NAME).so
 clean:
 	rm -f *.o $(NAME).so
 
-$(NAME).so: $(NAME).o $(FU_SRC)/furiend/shared.o shared.o request.o server.o
+$(NAME).so: $(NAME).o shared.o request.o server.o $(FU_SRC)/furiend/shared.o
 	$(LD) -o $@ $^ $(LIBS) $(LDFLAGS)
 
 .c.o:
