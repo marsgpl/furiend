@@ -26,6 +26,8 @@ typedef struct {
 
 LUAMOD_API int luaopen_redis(lua_State *L);
 
+int redis_pack(lua_State *L);
+int redis_unpack(lua_State *L);
 int redis_client(lua_State *L);
 int redis_client_gc(lua_State *L);
 int redis_connect(lua_State *L);

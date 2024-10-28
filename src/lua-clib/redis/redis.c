@@ -8,10 +8,16 @@ LUAMOD_API int luaopen_redis(lua_State *L) {
         lua_setfield(L, -2, "__gc");
     }
 
-    lua_createtable(L, 0, 2);
+    lua_createtable(L, 0, 4);
 
     lua_pushcfunction(L, redis_client);
     lua_setfield(L, -2, "client");
+
+    lua_pushcfunction(L, redis_pack);
+    lua_setfield(L, -2, "pack");
+
+    lua_pushcfunction(L, redis_unpack);
+    lua_setfield(L, -2, "unpack");
 
     lua_createtable(L, 0, 15);
         luaF_set_kv_int(L, -1, "STR", RESP_STR);
@@ -26,12 +32,41 @@ LUAMOD_API int luaopen_redis(lua_State *L) {
         luaF_set_kv_int(L, -1, "BULK_ERR", RESP_BULK_ERR);
         luaF_set_kv_int(L, -1, "VSTR", RESP_VSTR);
         luaF_set_kv_int(L, -1, "MAP", RESP_MAP);
-        luaF_set_kv_int(L, -1, "AGGR", RESP_ATTR);
+        luaF_set_kv_int(L, -1, "ATTR", RESP_ATTR);
         luaF_set_kv_int(L, -1, "SET", RESP_SET);
         luaF_set_kv_int(L, -1, "PUSH", RESP_PUSH);
     lua_setfield(L, -2, "type");
 
     return 1;
+}
+
+int redis_pack(lua_State *L) {
+    (void)L;
+    return 0;
+}
+
+int redis_unpack(lua_State *L) {
+    luaF_need_args(L, 1, "redis.unpack");
+    luaL_checktype(L, 1, LUA_TSTRING);
+
+    size_t len;
+    const char *buf = lua_tolstring(L, 1, &len);
+
+    if (unlikely(len > INT_MAX)) {
+        luaL_error(L, "buffer is too big: %d; max: %d", len, INT_MAX);
+    }
+
+    int parsed = resp_unpack(L, buf, len, 1);
+
+    if (unlikely(parsed == 0)) {
+        luaL_error(L, "not enough data");
+    }
+
+    if (parsed != (int)len) {
+        luaL_error(L, "bytes left after parsing: %d", len - parsed);
+    }
+
+    return 2; // data, type
 }
 
 int redis_client(lua_State *L) {

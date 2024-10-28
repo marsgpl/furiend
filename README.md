@@ -82,7 +82,6 @@ make
 - fifo encryption
 - basic dc
 - ci
-- inet_pton macro
 
 - tgbot: hook custom crt + static ip
 - http serv: req pool
