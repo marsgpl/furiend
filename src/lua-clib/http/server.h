@@ -54,18 +54,18 @@ typedef struct {
     int is_fallback_res;
 
     char *req;
-    int req_len;
-    int req_full_len;
-    int req_size;
+    size_t req_len;
+    size_t req_full_len;
+    size_t req_size;
     char *req_sep; // pos of \r\n\r\n
 
     char *res_headers;
-    int res_headers_len;
-    int res_headers_len_sent;
+    size_t res_headers_len;
+    size_t res_headers_len_sent;
 
     const char *res_body;
-    int res_body_len;
-    int res_body_len_sent;
+    size_t res_body_len;
+    size_t res_body_len_sent;
 } ud_http_serv_client;
 
 int http_serv(lua_State *L);

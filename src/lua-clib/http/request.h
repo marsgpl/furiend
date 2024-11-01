@@ -36,16 +36,16 @@ typedef struct {
     int state;
 
     char *headers;
-    int headers_len;
-    int headers_len_sent;
+    size_t headers_len;
+    size_t headers_len_sent;
 
     const char *body;
     size_t body_len;
     size_t body_len_sent;
 
     char *response;
-    int response_len;
-    int response_size;
+    size_t response_len;
+    size_t response_size;
 
     SSL_CTX *ssl_ctx;
     SSL *ssl;

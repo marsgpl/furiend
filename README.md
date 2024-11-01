@@ -76,14 +76,24 @@ sed -i "s/_CFLAGS =/_CFLAGS = \-I\/furiend\/vendor\/lua-5.4.7\/src/" Makefile
 make
 ```
 
+## segfaults, leaks
+
+```sh
+find src -type f -name *.o | xargs rm
+build && while tests; do :; done
+gdb --args lua segf.lua # r, bt 100, q, y
+valgrind --leak-check=full --show-leak-kinds=all -s tests
+```
+
 ## TODO
 
+- reduce allocs
 - socket
 - fifo encryption
 - basic dc
 - ci
-
 - tgbot: hook custom crt + static ip
+- http stress test
 - http serv: req pool
 - http serv: max clients
 - http serv: chunked
@@ -104,5 +114,5 @@ make
 - cookies
 - dns: more types
 - dns: ip6
-- socket: tcp + msg separation
 - fs: file, dir, stat
+- get rid of yyjson

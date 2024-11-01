@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <furiend/shared.h>
+#include <furiend/strbuf.h>
 
 #define RESP_SEP "\r\n"
 #define RESP_SEP_LEN 2
@@ -29,6 +30,12 @@
 #define RESP_SET '~'
 #define RESP_PUSH '>'
 
-int resp_unpack(lua_State *L, const char *buf, int buf_len, int push_type);
+void resp_pack(lua_State *L, luaF_strbuf *sb, int index);
+
+size_t resp_unpack(
+    lua_State *L,
+    const char *buf,
+    size_t buf_len,
+    int push_type);
 
 #endif

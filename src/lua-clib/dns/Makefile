@@ -3,8 +3,8 @@ FU_SRC= /furiend/src
 LUA_SRC= /furiend/vendor/lua-5.4.7/src
 CC= gcc
 LD= gcc
-CCFLAGS= -c -fPIC -O2 -std=c2x -march=native -fno-ident \
-    -Wall -Wextra -Wshadow -Wstrict-aliasing -Werror -pedantic
+CCFLAGS= -g -fstack-protector-all -c -fPIC -O2 -std=c2x -march=native \
+    -fno-ident -Wall -Wextra -Wshadow -Wstrict-aliasing -Werror -pedantic
 LDFLAGS= -shared -Wl,-z,max-page-size=0x1000
 INCS= -I$(FU_SRC) -I$(LUA_SRC)
 LIBS=

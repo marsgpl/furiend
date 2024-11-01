@@ -60,27 +60,8 @@ int json_stringify(lua_State *L) {
     return 1;
 }
 
-// type must be already LUA_TTABLE
-static int is_array(lua_State *L, int index) {
-    int next_idx = 1;
-
-    lua_pushnil(L);
-    while (lua_next(L, index)) {
-        if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) != next_idx++) {
-            lua_pop(L, 2); // lua_next (key, value)
-            return 0;
-        }
-
-        lua_pop(L, 1); // lua_next (value)
-    }
-
-    return next_idx - 1; // return array len, 0 - not array
-}
-
 static void json_parse_value(lua_State *L, yyjson_val *value) {
-    yyjson_type type = yyjson_get_type(value);
-
-    switch (type) {
+    switch (yyjson_get_type(value)) {
         case YYJSON_TYPE_NULL:
             lua_pushnil(L);
             return;
@@ -141,9 +122,7 @@ static yyjson_mut_val *json_stringify_value(
     int index,
     int cache_index
 ) {
-    int type = lua_type(L, index);
-
-    switch (type) {
+    switch (lua_type(L, index)) {
         case LUA_TNONE:
         case LUA_TNIL:
             return yyjson_mut_null(doc);
@@ -163,7 +142,7 @@ static yyjson_mut_val *json_stringify_value(
             return json_stringify_table(L, doc, index, cache_index);
         default: // LUA_TFUNCTION LUA_TTHREAD LUA_TUSERDATA LUA_TLIGHTUSERDATA
             luaL_error(L, "type is not supported; type: %s",
-                lua_typename(L, type));
+                luaL_typename(L, index));
             return NULL; // make typecheck happy (luaL_error longjmp)
     }
 }
@@ -186,7 +165,7 @@ static yyjson_mut_val *json_stringify_table(
     lua_pushboolean(L, 1);
     lua_rawsetp(L, cache_index, cache_key);
 
-    if (unlikely(is_array(L, index))) {
+    if (unlikely(luaF_is_array(L, index))) {
         yyjson_mut_val *arr = yyjson_mut_arr(doc);
         yyjson_mut_val *val;
 

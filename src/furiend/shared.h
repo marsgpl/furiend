@@ -34,7 +34,7 @@ static_assert(sizeof(char) == 1, "sizeof(char) is not 1");
 
 #define F_GETSOCKOPT_FAILED -1 // see get_socket_error_code
 
-#define F_ESC_STR_SUFFIX " ... (%d more)"
+#define F_ESC_STR_SUFFIX " ... (%lu more)"
 
 #define inline __inline__
 #define likely(expr) __builtin_expect(expr, 1)
@@ -87,6 +87,7 @@ int get_socket_error_code(int fd);
 int parse_dec(char **pos);
 int parse_hex(char **pos);
 int uint_len(uint64_t num);
+int int_len(int64_t num);
 
 void luaF_print_time(lua_State *L, FILE *stream);
 void luaF_print_value(lua_State *L, FILE *stream, int index);
@@ -109,8 +110,8 @@ const char *luaF_status_label(int status);
 const char *luaF_escape_string(
     lua_State *L,
     const char *buf,
-    int buf_len,
-    int max_len);
+    size_t buf_len,
+    size_t max_len);
 int luaF_loop_watch(lua_State *L, int fd, int emask, int sub_idx);
 int luaF_loop_protected_watch(lua_State *L, int fd, int emask, int sub_idx);
 void luaF_loop_notify_t_subs(
@@ -120,6 +121,8 @@ void luaF_loop_notify_t_subs(
     int t_idx,
     int t_status,
     int t_nres);
+int luaF_is_array(lua_State *L, int index);
+void *luaF_malloc_or_error(lua_State *L, size_t size);
 
 #endif
 

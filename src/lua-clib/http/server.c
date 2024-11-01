@@ -331,7 +331,7 @@ static int client_start(lua_State *L) {
     client->body_ready = 0;
     client->is_fallback_res = 0;
 
-    client->req = malloc(HTTP_QUERY_HEADERS_MAX_LEN);
+    client->req = luaF_malloc_or_error(L, HTTP_QUERY_HEADERS_MAX_LEN);
     client->req_len = 0;
     client->req_full_len = 0;
     client->req_size = HTTP_QUERY_HEADERS_MAX_LEN - 1; // for nul
@@ -346,11 +346,6 @@ static int client_start(lua_State *L) {
     client->res_body_len_sent = 0;
 
     luaL_setmetatable(L, MT_HTTP_SERV_CLIENT);
-
-    if (unlikely(client->req == NULL)) {
-        luaF_error_errno(L, "malloc failed; size: %d",
-            HTTP_QUERY_HEADERS_MAX_LEN);
-    }
 
     // watch fd
 
@@ -592,7 +587,7 @@ static void client_build_response(lua_State *L, ud_http_serv_client *client) {
     lua_concat(L, 3);
     headers = lua_tolstring(L, top_idx + 4, &headers_len);
 
-    int head_len = strlen(HTTP_VERSION) + 1
+    size_t head_len = strlen(HTTP_VERSION) + 1
         + uint_len(status_code) + 1
         + status_msg_len + 2
         + headers_len + 2
@@ -616,8 +611,15 @@ static void client_build_response(lua_State *L, ud_http_serv_client *client) {
     client->res_body = body;
     client->res_body_len = body_len;
 
-    snprintf(client->res_headers, head_len, "%s %d %s" SEP "%s" SEP,
+    int written = snprintf(client->res_headers, head_len,
+        "%s %d %s" SEP "%s" SEP,
         HTTP_VERSION, status_code, status_msg, headers);
+
+    if (unlikely((size_t)written != head_len)) {
+        luaF_warning(L,
+            "http response headers snprintf failed; written: %d of %d",
+            written, head_len);
+    }
 
     lua_settop(L, top_idx);
     return;

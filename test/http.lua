@@ -16,6 +16,7 @@ return function()
         }
 
         server:on_request(function(req, res)
+            res:set_body("123\0aaa")
             trace(req)
             trace(res)
         end)

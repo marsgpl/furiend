@@ -402,12 +402,7 @@ static void request_on_send_complete(lua_State *L, ud_http_request *req) {
     }
 
     req->response_size = HTTP_RESPONSE_INITIAL_SIZE - 1;
-    req->response = malloc(HTTP_RESPONSE_INITIAL_SIZE);
-
-    if (unlikely(req->response == NULL)) {
-        luaF_error_errno(L, "response malloc failed; size: %d",
-            HTTP_RESPONSE_INITIAL_SIZE);
-    }
+    req->response = luaF_malloc_or_error(L, HTTP_RESPONSE_INITIAL_SIZE);
 }
 
 static int request_finish(lua_State *L, ud_http_request *req) {
@@ -457,9 +452,9 @@ static int request_finish(lua_State *L, ud_http_request *req) {
     const char *body = state.line + state.ltrim;
     size_t body_len = state.rest_len - state.ltrim - state.rtrim;
 
-    int left_pad = body - req->response;
-    int right_pad = state.rtrim;
-    int total = left_pad + body_len + right_pad;
+    size_t left_pad = body - req->response;
+    size_t right_pad = state.rtrim;
+    size_t total = left_pad + body_len + right_pad;
 
     if (total != req->response_len) {
         luaL_error(L, "chunk len doesn't fit in response len"
@@ -584,7 +579,7 @@ static void build_headers(lua_State *L, ud_http_request *req) {
     const char *content_type = conf->content_type;
     int can_have_body = conf->can_have_body;
 
-    int len = strlen(method)
+    size_t len = strlen(method)
         + strlen(" ") + strlen(conf->path)
         + strlen(" ") + strlen(HTTP_VERSION)
         + strlen(SEP)
@@ -621,21 +616,20 @@ static void build_headers(lua_State *L, ud_http_request *req) {
             len, HTTP_QUERY_HEADERS_MAX_LEN);
     }
 
-    req->headers = malloc(len);
+    req->headers = luaF_malloc_or_error(L, len);
     req->headers_len = len - 1; // exclude nul
 
-    if (!req->headers) {
-        luaF_error_errno(L, "headers malloc failed; size: %d", len);
-    }
-
     char *headers = req->headers;
-    int r;
+    int written;
 
     #define PUSH(line, ...) { \
-        r = snprintf(headers, len, line SEP __VA_OPT__(,) __VA_ARGS__); \
-        if (unlikely(r < 0)) luaF_error_errno(L, "snprintf failed"); \
-        headers += r; \
-        len -= r; \
+        written = snprintf(headers, len, line SEP __VA_OPT__(,) __VA_ARGS__); \
+        if (unlikely(written < 0)) { \
+            luaF_error_errno(L, "snprintf failed; written: %d of %d", \
+                written, len); \
+        } \
+        headers += written; \
+        len -= written; \
     }
 
     PUSH("%s %s %s", method, conf->path, HTTP_VERSION);

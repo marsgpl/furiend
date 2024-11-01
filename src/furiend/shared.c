@@ -84,6 +84,35 @@ int uint_len(uint64_t num) {
     return 20; // max: 18446744073709551615ULL
 }
 
+int int_len(int64_t num) {
+    int is_neg = num < 0;
+
+    if (is_neg) {
+        num = -num;
+    }
+
+    if (num < 10LL) return 1 + is_neg;
+    if (num < 100LL) return 2 + is_neg;
+    if (num < 1000LL) return 3 + is_neg;
+    if (num < 10000LL) return 4 + is_neg;
+    if (num < 100000LL) return 5 + is_neg;
+    if (num < 1000000LL) return 6 + is_neg;
+    if (num < 10000000LL) return 7 + is_neg;
+    if (num < 100000000LL) return 8 + is_neg;
+    if (num < 1000000000LL) return 9 + is_neg;
+    if (num < 10000000000LL) return 10 + is_neg;
+    if (num < 100000000000LL) return 11 + is_neg;
+    if (num < 1000000000000LL) return 12 + is_neg;
+    if (num < 10000000000000LL) return 13 + is_neg;
+    if (num < 100000000000000LL) return 14 + is_neg;
+    if (num < 1000000000000000LL) return 15 + is_neg;
+    if (num < 10000000000000000LL) return 16 + is_neg;
+    if (num < 100000000000000000LL) return 17 + is_neg;
+    if (num < 1000000000000000000LL) return 18 + is_neg;
+
+    return 19 + is_neg;
+}
+
 int get_socket_error_code(int fd) {
     int value;
     socklen_t value_len = sizeof(value);
@@ -481,14 +510,19 @@ void luaF_loop_notify_t_subs(
 const char *luaF_escape_string(
     lua_State *L,
     const char *buf,
-    int buf_len,
-    int max_len
+    size_t buf_len,
+    size_t max_len
 ) {
+    if (unlikely(buf == NULL)) {
+        lua_pushnil(L);
+        return NULL;
+    }
+
     int is_cropped = max_len > 0 && max_len < buf_len;
-    int hidden_n;
-    int suffix_len;
-    int len;
-    int esc_size;
+    size_t hidden_n;
+    size_t suffix_len;
+    size_t len;
+    size_t esc_size;
 
     if (is_cropped) {
         hidden_n = buf_len - max_len;
@@ -500,14 +534,10 @@ const char *luaF_escape_string(
         esc_size = buf_len * 4 + 1; // +1 for nul
     }
 
-    char *esc = malloc(esc_size);
-    int i = 0; // index in esc
+    char *esc = luaF_malloc_or_error(L, esc_size);
+    size_t i = 0; // index in esc
 
-    if (unlikely(esc == NULL)) {
-        luaL_error(L, "malloc failed: %d", esc_size);
-    }
-
-    for (int buf_i = 0; buf_i < len; ++buf_i) {
+    for (size_t buf_i = 0; buf_i < len; ++buf_i) {
         unsigned char c = buf[buf_i];
 
         switch (c) {
@@ -537,4 +567,32 @@ const char *luaF_escape_string(
     free(esc);
 
     return lua_tostring(L, -1);
+}
+
+// type must be already LUA_TTABLE
+int luaF_is_array(lua_State *L, int index) {
+    int next_idx = 1;
+
+    lua_pushnil(L);
+    while (lua_next(L, index)) {
+        if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) != next_idx) {
+            lua_pop(L, 2); // lua_next (key, value)
+            return 0;
+        }
+
+        next_idx++;
+        lua_pop(L, 1); // lua_next (value)
+    }
+
+    return next_idx - 1; // return array len, 0 - not array
+}
+
+void *luaF_malloc_or_error(lua_State *L, size_t size) {
+    void *buf = malloc(size);
+
+    if (unlikely(buf == NULL)) {
+        luaL_error(L, "malloc failed; size: %d", size);
+    }
+
+    return buf;
 }
