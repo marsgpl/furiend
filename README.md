@@ -78,7 +78,7 @@ luarocks-5.4 install lua-cjson
 ```sh
 find src -type f -name *.o | xargs rm
 build && while tests; do :; done
-gdb --args lua test/tests.lua # r, bt 100, q, y
+gdb --args lua test/main.lua # r, bt 100, q, y
 valgrind --leak-check=full --show-leak-kinds=all -s tests
 tcpflow -c port 30303 > dump.txt &
 build && tests

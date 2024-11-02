@@ -3,7 +3,6 @@
 static int listen_start(lua_State *L);
 static int listen_continue(lua_State *L, int status, lua_KContext ctx);
 static void listen_accept(lua_State *L, ud_http_serv *serv);
-
 static int client_start(lua_State *L);
 static int client_wait_read(lua_State *L, int status, lua_KContext ctx);
 static int client_process_read(lua_State *L);
@@ -14,13 +13,10 @@ static int client_respond(lua_State *L);
 static void client_build_response(lua_State *L, ud_http_serv_client *client);
 static int client_wait_write(lua_State *L, int status, lua_KContext ctx);
 static int client_process_write(lua_State *L, ud_http_serv_client *client);
-
 static int on_request_finish(lua_State *L, int status, lua_KContext ctx);
 static int on_error_finish(lua_State *L, int status, lua_KContext ctx);
-
 static int default_on_request(lua_State *L);
 static int default_on_error(lua_State *L);
-
 static void parse_conf(lua_State *L, ud_http_serv *serv, int conf_idx);
 static void check_conf(lua_State *L, ud_http_serv *serv);
 

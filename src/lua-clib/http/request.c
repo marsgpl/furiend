@@ -12,13 +12,9 @@ static void request_shutdown_tls(lua_State *L, ud_http_request *req);
 static void request_on_send_complete(lua_State *L, ud_http_request *req);
 static int request_finish(lua_State *L, ud_http_request *req);
 static void resize_response_buf(lua_State *L, ud_http_request *req);
-
-// request
 static void parse_conf(lua_State *L, ud_http_request *req, int conf_idx);
 static void check_conf(lua_State *L, ud_http_request *req);
 static void build_headers(lua_State *L, ud_http_request *req);
-
-// response
 static void move_chunked(ud_http_request *req, headers_parser_state *state);
 
 int http_request(lua_State *L) {
