@@ -1,55 +1,26 @@
 warn "@on"
 
-package.path = "/furiend/?.lua;/furiend/src/lua-lib/?.lua"
+package.path = "/furiend/src/lua-lib/?.lua;/furiend/src/dc/?.lua"
 package.cpath = "/furiend/src/lua-clib/?/?.so"
 
 local async = require "async"
 local loop, wait = async.loop, async.wait
 local redis = require "redis"
 local log = require "log"
-local json = require "json"
 local time = require "time"
-local trace = require "trace"
+local json = require "json"
+local logic = require "lib.logic"
 
-local config = require "src.dc.config"
+local config = require "config"
 
 loop(function()
-    local cmd_ids = {}
+    local rc = redis.client(config.redis)
 
-    local rc -- redis client
-
-    local on_push = function(push)
-        push = json.parse(push)
-        push.time = time()
-
-        trace("push:", push)
-
-        if push.from == "fe2"
-            and push.type == "tg_event"
-            and push.event.message.text
-        then
-            local cmd_id = cmd_ids[push.from] or 1
-
-            wait(rc:publish(push.from, json.stringify {
-                from = config.id,
-                type = "cmd",
-                cmd = "sendChatAction",
-                cmd_id = cmd_id,
-                body = {
-                    chat_id = push.event.message.chat.id,
-                    action = "typing",
-                },
-            }))
-
-            cmd_ids[push.from] = cmd_id + 1
-        end
-    end
-
-    -- redis
-
-    config.redis.client_name = config.id
-
-    rc = redis.client(config.redis)
+    local dc = {
+        cmd_ids = {},
+        config = config,
+        rc = rc,
+    }
 
     wait(rc:connect())
     log("connected to redis", config.redis.ip4, config.redis.port)
@@ -57,10 +28,18 @@ loop(function()
     wait(rc:hello(config.redis))
     log("redis authorized", config.redis.client_name)
 
-    wait(rc:subscribe(config.id, on_push))
+    wait(rc:subscribe(config.id, function(push)
+        local event = json.parse(push)
+        event.time = time()
+        logic(dc, event)
+    end))
     log("redis subscribed", config.id)
 
-    -- wait for graceful shutdown
+    logic(dc, {
+        from = config.id,
+        type = "start",
+        time = time(),
+    })
 
     wait(rc:join())
 end)

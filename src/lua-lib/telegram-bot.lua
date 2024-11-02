@@ -2,7 +2,6 @@ local async = require "async"
 local wait = async.wait
 local http = require "http"
 local json = require "json"
-local trace = require "trace"
 
 -- https://core.telegram.org/bots/api
 

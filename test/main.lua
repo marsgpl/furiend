@@ -1,6 +1,6 @@
 warn "@on"
 
-package.path = "/furiend/?.lua;/furiend/src/lua-lib/?.lua"
+package.path = "/furiend/src/lua-lib/?.lua;/furiend/?.lua"
 package.cpath = "/furiend/src/lua-clib/?/?.so"
 
 local async = require "async"

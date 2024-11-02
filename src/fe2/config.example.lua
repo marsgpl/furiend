@@ -5,9 +5,11 @@ return {
         ip4 = "172.20.0.3",
         port = 30303,
         password = "LocalPassword123",
+        client_name = "fe2",
     },
     dns = {
         ip4 = "1.1.1.1",
+        timeout = 3,
     },
     telegram = {
         host = "api.telegram.org",

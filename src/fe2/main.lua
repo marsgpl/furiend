@@ -1,6 +1,6 @@
 warn "@on"
 
-package.path = "/furiend/?.lua;/furiend/src/lua-lib/?.lua"
+package.path = "/furiend/src/lua-lib/?.lua;/furiend/src/fe2/?.lua"
 package.cpath = "/furiend/src/lua-clib/?/?.so"
 
 local async = require "async"
@@ -8,19 +8,14 @@ local loop, wait = async.loop, async.wait
 local redis = require "redis"
 local log = require "log"
 local json = require "json"
+local dns = require "dns"
 local tgbot = require "telegram-bot"
 local tgwh = require "telegram-bot-webhook"
-local dns = require "dns"
+local is_dc_cmd = require "lib.is-dc-cmd"
+local is_tg_event = require "lib.is-tg-event"
 
-local config = require "src.fe2.config"
+local config = require "config"
 local in_docker = os.getenv("IN_DOCKER")
-
-local function is_dc_cmd(push)
-    return push.from == config.dc
-        and push.type == "cmd"
-        and type(push.cmd) == "string"
-        and type(push.cmd_id) == "number"
-end
 
 loop(function()
     log("env", in_docker and "in docker" or "not in docker")
@@ -40,13 +35,12 @@ loop(function()
 
         local result = tg:request("POST", push.cmd, push.body)
 
-        log("cmd done", push.cmd_id)
-        dc { type = "cmd_done", cmd_id = push.cmd_id, result = result }
+        log("cmd ok", push.cmd_id)
+        dc { type = "cmd_ok", cmd_id = push.cmd_id, result = result }
     end
 
     local on_push_safe = function(push)
         push = json.parse(push)
-
         local ok, errmsg = pcall(on_push, push)
 
         if not ok then
@@ -56,8 +50,6 @@ loop(function()
     end
 
     -- redis
-
-    config.redis.client_name = config.id
 
     rc = redis.client(config.redis)
 
@@ -77,7 +69,10 @@ loop(function()
     local tg_conf = config.telegram
     local wh_conf = tg_conf.webhook
 
-    tg_conf.dns_client = dns.client { ip4 = config.dns.ip4 }
+    tg_conf.dns_client = dns.client {
+        ip4 = config.dns.ip4,
+        timeout = config.dns.timeout,
+    }
 
     tg = tgbot(tg_conf)
 
@@ -86,6 +81,10 @@ loop(function()
     end
 
     wh_conf.on_data = function(req, event)
+        if not is_tg_event(event) then
+            error("tgwh received bad event: " .. json.stringify(event))
+        end
+
         log("tg event", event.update_id)
         dc { type = "tg_event", event = event }
     end
@@ -121,6 +120,6 @@ loop(function()
 
     -- wait for graceful shutdown
 
-    wait(rc:join())
+    wait(rc:join()) -- TODO: migrate to race
     -- race(rc:join(), wh:join())
 end)
