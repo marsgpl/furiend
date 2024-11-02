@@ -18,6 +18,8 @@
 #define SERV_UV_IDX_CLIENTS 2
 #define SERV_UV_IDX_ON_REQUEST 3
 #define SERV_UV_IDX_ON_ERROR 4
+#define SERV_UV_IDX_JOIN_THREAD 5
+#define SERV_UV_IDX_N 5
 
 #define HTTP_SERV_IDX 1
 
@@ -70,6 +72,7 @@ typedef struct {
 
 int http_serv(lua_State *L);
 int http_serv_gc(lua_State *L);
+int http_serv_join(lua_State *L);
 int http_serv_listen(lua_State *L);
 int http_serv_on_request(lua_State *L);
 int http_serv_on_error(lua_State *L);

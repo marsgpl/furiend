@@ -13,8 +13,3 @@ RUN apk add cmake # yyjson
 RUN apk add tcl # redis test
 RUN apk add git openssh curl vim
 RUN apk add luarocks5.4 # cjson
-
-ENV IN_DOCKER=true
-
-# fe2 tgwh
-EXPOSE 19001/tcp

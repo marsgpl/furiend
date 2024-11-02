@@ -2,6 +2,7 @@ local async = require "async"
 local wait = async.wait
 local http = require "http"
 local json = require "json"
+local trace = require "trace"
 
 -- https://core.telegram.org/bots/api
 
@@ -9,6 +10,7 @@ local prototype = {}
 local mt = { __index = prototype }
 
 function prototype:get_updates()
+    -- does not work if webhook was set
     return self:request("POST", "getUpdates", {
         timeout = 1,
         allowed_updates = self.config.hook.allowed_updates,
@@ -28,7 +30,11 @@ end
 function prototype:set_webhook(config)
     -- {"url":"https://xxx","secret_token":"xxx","allowed_updates":{"message","edited_message","message_reaction"}}
     assert(type(config) == "table")
-    return self:request("POST", "setWebhook", config)
+    return self:request("POST", "setWebhook", {
+        url = config.url,
+        secret_token = config.secret_token,
+        allowed_updates = config.allowed_updates,
+    })
     -- {"ok":true,"result":true,"description":"Webhook was set"}
     -- {"ok":true,"result":true,"description":"Webhook is already set"}
     -- {"ok":false,"error_code":400,"description":"Bad Request: bad webhook: Failed to resolve host: No address associated with hostname"}
@@ -61,10 +67,12 @@ function prototype:request(method, path, body)
     end
 
     local res = wait(http.request(conf))
+
     local response = json.parse(res.body)
 
-    -- {"ok":false,"error_code":404,"description":"Not Found"}
     -- print(res.body)
+    -- {"ok":false,"error_code":404,"description":"Not Found"}
+    -- {"ok":false,"error_code":400,"description":"Bad Request: ? is empty"}
 
     if type(response) ~= "table" or not response.ok then
         error("request failed; response: " .. res.body)
@@ -73,8 +81,8 @@ function prototype:request(method, path, body)
     return response.result
 end
 
-return function(config, dns_client)
-    -- {"host":"api.telegram.org","token":"xxx"}
+return function(config)
+    -- {"host":"api.telegram.org","token":"xxx","dns_client":xxx}
     assert(type(config) == "table")
 
     return setmetatable({

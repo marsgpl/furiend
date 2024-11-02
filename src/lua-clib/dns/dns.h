@@ -26,9 +26,9 @@
 #define LABEL_MAX_LEN 63
 #define REQ_MAX_LEN 512
 
-#define DNS_UDUVIDX_ID_SUBS 1
-#define DNS_UDUVIDX_SEND_QUEUE 2
-#define DNS_UDUVIDX_ROUTER 3
+#define DNS_UV_IDX_ID_SUBS 1
+#define DNS_UV_IDX_SEND_QUEUE 2
+#define DNS_UV_IDX_ROUTER 3
 
 #define parse_uint16(buf) ntohs(((buf)[0]) | (((buf)[1]) << 8))
 #define parse_uint32(buf) ntohl(*(uint32_t *)(buf))

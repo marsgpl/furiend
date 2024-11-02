@@ -15,8 +15,7 @@ static int sleep_create(lua_State *L) {
     lua_pushcfunction(T, sleep_start);
     lua_xmove(L, T, 1); // num -> T
 
-    int nres;
-    lua_resume(T, L, 1, &nres); // should yield, 0 nres
+    lua_resume(T, L, 1, &(int){0}); // should yield, 0 nres
 
     return 1; // T
 }

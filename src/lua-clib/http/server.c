@@ -19,13 +19,15 @@ static int default_on_request(lua_State *L);
 static int default_on_error(lua_State *L);
 static void parse_conf(lua_State *L, ud_http_serv *serv, int conf_idx);
 static void check_conf(lua_State *L, ud_http_serv *serv);
+static int http_serv_join_start(lua_State *L);
+static int http_serv_join_continue(lua_State *L, int status, lua_KContext ctx);
 
 int http_serv(lua_State *L) {
     luaF_need_args(L, 1, "http server");
     luaL_checktype(L, 1, LUA_TTABLE); // conf
 
     ud_http_serv *serv = luaF_new_uduv_or_error(L,
-        sizeof(ud_http_serv), 4);
+        sizeof(ud_http_serv), SERV_UV_IDX_N);
 
     serv->fd = -1;
 
@@ -57,6 +59,12 @@ int http_serv_gc(lua_State *L) {
         serv->fd = -1;
     }
 
+    lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
+    int t_subs_idx = 4;
+
+    lua_getiuservalue(L, 1, SERV_UV_IDX_JOIN_THREAD);
+    luaF_resume(L, t_subs_idx, lua_tothread(L, -1), -1, 0);
+
     return 0;
 }
 
@@ -70,8 +78,7 @@ int http_serv_listen(lua_State *L) {
     lua_pushcfunction(T, listen_start);
     lua_xmove(L, T, 1); // serv >> T
 
-    int nres;
-    lua_resume(T, L, 1, &nres); // should yield, 0 nres
+    lua_resume(T, L, 1, &(int){0}); // should yield, 0 nres
 
     return 1;
 }
@@ -298,8 +305,7 @@ static void listen_accept(lua_State *L, ud_http_serv *serv) {
 
         // start
 
-        int nres;
-        int status = lua_resume(T, L, 4, &nres);
+        int status = lua_resume(T, L, 4, &(int){0});
 
         if (unlikely(status != LUA_YIELD)) {
             luaF_warning(L, "client_start failed: %s", lua_tostring(T, -1));
@@ -765,4 +771,37 @@ static void parse_conf(lua_State *L, ud_http_serv *serv, int conf_idx) {
 static void check_conf(lua_State *L, ud_http_serv *serv) {
     (void)L;
     (void)serv;
+}
+
+int http_serv_join(lua_State *L) {
+    luaF_need_args(L, 1, "join");
+
+    lua_State *T = luaF_new_thread_or_error(L);
+
+    lua_pushcfunction(T, http_serv_join_start);
+    lua_insert(L, 1);
+    lua_xmove(L, T, 1);
+    lua_resume(T, L, 1, &(int){0});
+
+    return 1;
+}
+
+static int http_serv_join_start(lua_State *L) {
+    ud_http_serv *serv = luaL_checkudata(L, 1, MT_HTTP_SERV);
+
+    if (serv->fd == -1) {
+        return 0;
+    }
+
+    lua_pushthread(L);
+    lua_setiuservalue(L, 1, SERV_UV_IDX_JOIN_THREAD);
+
+    return lua_yieldk(L, 0, 0, http_serv_join_continue);
+}
+
+static int http_serv_join_continue(lua_State *L, int status, lua_KContext ctx) {
+    (void)L;
+    (void)status;
+    (void)ctx;
+    return 0;
 }

@@ -123,6 +123,12 @@ void luaF_loop_notify_t_subs(
     int t_nres);
 int luaF_is_array(lua_State *L, int index);
 void *luaF_malloc_or_error(lua_State *L, size_t size);
+int luaF_resume(
+    lua_State *L,
+    int t_subs_idx,
+    lua_State *T,
+    int t_idx,
+    int t_nargs);
 
 #endif
 

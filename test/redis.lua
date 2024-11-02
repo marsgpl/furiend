@@ -16,9 +16,12 @@ return function()
 
     perf()
     do
-        local data, t = wait(client:query(
-            "hello 3 auth default LocalPassword123 setname test\r\n"
-        ))
+        local data, t = wait(client:hello {
+            protocol_version = 3,
+            username = "default",
+            password = "LocalPassword123",
+            client_name = "test",
+        })
         trace(data)
         assert(t == redis.type.MAP, "incorrect type")
         assert(data.proto == 3, "incorrect data")
@@ -28,7 +31,7 @@ return function()
     perf()
     do
         local reqs = {
-            client:query("ping\r\n"),
+            client:ping(),
             client:query("lastsave\r\n"),
             client:query("client info\r\n"),
         }

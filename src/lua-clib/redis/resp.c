@@ -366,7 +366,7 @@ static void pack_len(
 ) {
     size_t full_len = 1 + int_len(len) + RESP_SEP_LEN;
 
-    luaF_strbuf_ensure_space(L, sb, full_len);
+    luaF_strbuf_ensure_space(L, sb, full_len + 1);
 
     int written = snprintf(sb->buf + sb->filled, full_len + 1,
         "%c%lld" RESP_SEP,
@@ -434,7 +434,7 @@ static void pack_number(lua_State *L, luaF_strbuf *sb, int index) {
 
         size_t max_len = 1 + 15 + RESP_SEP_LEN;
 
-        luaF_strbuf_ensure_space(L, sb, max_len);
+        luaF_strbuf_ensure_space(L, sb, max_len + 1);
 
         int written = snprintf(sb->buf + sb->filled, max_len + 1,
             "," LUA_NUMBER_FMT RESP_SEP,

@@ -1,5 +1,8 @@
 #!/bin/sh
 
+reset
+clear
+
 NAME=furiend_shell
 RUNNING=$(docker container list --filter name=$NAME --quiet)
 STOPPED=$(docker container list --all --filter name=$NAME --quiet)
@@ -16,12 +19,11 @@ else # not created
         --tty \
         --interactive \
         --name $NAME \
+        --workdir /furiend \
         --network furiend \
         --hostname shell \
         --ip 172.20.0.2 \
-        --publish 127.0.0.1:19001:19001 \
         --env ENV=/root/.profile \
-        --workdir /furiend \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \

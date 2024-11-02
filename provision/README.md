@@ -14,8 +14,8 @@ open "https://$FE2_HOST"
 rsync -i ~/.ssh/id_rsa -rv provision/fe2/* root@$FE2_IP4:/
 ssh -i ~/.ssh/id_rsa root@$FE2_IP4
 
-rsync -e 'ssh -p 2' -rv provision/fe2/* root@$FE2_IP4:/
-ssh -p 2 -o SendEnv="FE2_* CF_*" root@$FE2_IP4
+rsync -e "ssh -p $FE2_PORT" -rv provision/fe2/* root@$FE2_IP4:/
+ssh -p $FE2_PORT -o SendEnv="FE2_* CF_*" root@$FE2_IP4
 
 unlink /etc/motd.d/cockpit
 dnf remove rpcbind chrony -y
@@ -45,11 +45,4 @@ cloudflare POST dns_records "{\"type\":\"AAAA\",\"name\":\"fe2\",\"content\":\"$
 ```sh
 # on access error (in case files were moved)
 restorecon -v -R /usr/share/nginx
-```
-
-## port forward
-
-```sh
-. provision/.env
-ssh -p 2 -vnNT -R 19001:127.0.0.1:19001 root@$FE2_IP4
 ```

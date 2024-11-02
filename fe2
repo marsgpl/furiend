@@ -3,7 +3,7 @@
 reset
 clear
 
-NAME=furiend_redis
+NAME=furiend_fe2
 RUNNING=$(docker container list --filter name=$NAME --quiet)
 STOPPED=$(docker container list --all --filter name=$NAME --quiet)
 
@@ -21,14 +21,15 @@ else # not created
         --name $NAME \
         --workdir /furiend \
         --network furiend \
-        --hostname redis \
-        --ip 172.20.0.3 \
+        --hostname fe2 \
+        --ip 172.20.0.5 \
         --env ENV=/root/.profile \
+        --env IN_DOCKER=true \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \
-        --entrypoint /furiend/bin/redis-server \
-        --publish 127.0.0.1:30303:30303 \
+        --entrypoint /furiend/bin/lua \
+        --publish 127.0.0.1:19001:19001 \
         furiend \
-        /furiend/docker/redis.conf
+        /furiend/src/fe2/main.lua
 fi

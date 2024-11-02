@@ -38,8 +38,7 @@ int dns_resolve(lua_State *L) {
     lua_pushcfunction(T, dns_resolve_start);
     lua_xmove(L, T, 2); // client, conf >> T
 
-    int nres;
-    lua_resume(T, L, 2, &nres); // should yield, 0 nres
+    lua_resume(T, L, 2, &(int){0}); // should yield, 0 nres
 
     return 1; // T
 }
@@ -60,7 +59,7 @@ static int dns_resolve_start(lua_State *L) {
         luaL_error(L, "not bound to socket");
     }
 
-    lua_getiuservalue(L, 1, DNS_UDUVIDX_ID_SUBS);
+    lua_getiuservalue(L, 1, DNS_UV_IDX_ID_SUBS);
 
     int req_id = dns_pack(L, client, name, type, class);
 
@@ -146,15 +145,13 @@ static int dns_client(lua_State *L) {
     lua_Number tmt = luaL_optnumber(L, 4, DNS_DEFAULT_TIMEOUT);
     int parallel = lua_toboolean(L, 5);
 
-    int status, nres;
-
     ud_dns_client *client = luaF_new_uduv_or_error(L, sizeof(ud_dns_client), 2);
 
     lua_createtable(L, 0, 2);
-    lua_setiuservalue(L, -2, DNS_UDUVIDX_ID_SUBS);
+    lua_setiuservalue(L, -2, DNS_UV_IDX_ID_SUBS);
 
     lua_createtable(L, 2, 0);
-    lua_setiuservalue(L, -2, DNS_UDUVIDX_SEND_QUEUE);
+    lua_setiuservalue(L, -2, DNS_UV_IDX_SEND_QUEUE);
 
     struct sockaddr_in sa = {0};
     luaF_set_ip4_port(L, &sa, ip4, port);
@@ -190,7 +187,7 @@ static int dns_client(lua_State *L) {
     lua_pushvalue(L, 1); // clone client
     lua_xmove(L, router, 1); // client >> router
 
-    status = lua_resume(router, L, 1, &nres); // should yield, 0 nres
+    int status = lua_resume(router, L, 1, &(int){0}); // should yield, 0 nres
 
     if (unlikely(status != LUA_YIELD)) {
         luaL_error(L, "router init failed: %s", lua_tostring(router, -1));
@@ -212,7 +209,7 @@ static int dns_client_gc(lua_State *L) {
     client->fd = -1;
 
     lua_settop(L, 2); // client, error msg or nil
-    lua_getiuservalue(L, 1, DNS_UDUVIDX_ID_SUBS);
+    lua_getiuservalue(L, 1, DNS_UV_IDX_ID_SUBS);
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
 
     int id_subs_idx = 3;
@@ -228,12 +225,7 @@ static int dns_client_gc(lua_State *L) {
             ? lua_tostring(L, 2) // gc called from router
             : "dns.client.gc called");
 
-        int sub_nres;
-        int sub_status = lua_resume(sub, L, 2, &sub_nres); // shouldn't yield
-
-        luaF_loop_notify_t_subs(L, t_subs_idx,
-            sub, sub_idx, sub_status, sub_nres);
-
+        luaF_resume(L, t_subs_idx, sub, sub_idx, 2);
         lua_pop(L, 1); // lua_next
     }
 
@@ -300,7 +292,7 @@ static int dns_router_process_event(lua_State *L) {
 }
 
 static void dns_router_read(lua_State *L, ud_dns_client *client) {
-    lua_getiuservalue(L, 1, DNS_UDUVIDX_ID_SUBS);
+    lua_getiuservalue(L, 1, DNS_UV_IDX_ID_SUBS);
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
 
     int id_subs_idx = lua_gettop(L) - 1;
@@ -336,11 +328,7 @@ static void dns_router_read(lua_State *L, ud_dns_client *client) {
 
             lua_pushboolean(sub, 1);
 
-            int sub_nres;
-            int sub_status = lua_resume(sub, L, 1, &sub_nres); // doesn't yield
-
-            luaF_loop_notify_t_subs(L, t_subs_idx,
-                sub, sub_idx, sub_status, sub_nres);
+            luaF_resume(L, t_subs_idx, sub, sub_idx, 1);
         } else {
             luaF_warning(L, "dns sub not found; req id: %d", req_id);
         }
@@ -357,7 +345,7 @@ static void process_send_queue(lua_State *L, ud_dns_client *client) {
         return;
     }
 
-    lua_getiuservalue(L, 1, DNS_UDUVIDX_SEND_QUEUE);
+    lua_getiuservalue(L, 1, DNS_UV_IDX_SEND_QUEUE);
 
     int queue_idx = lua_gettop(L);
     int sent_n = 0;
@@ -400,14 +388,14 @@ static void process_send_queue(lua_State *L, ud_dns_client *client) {
 }
 
 static void unsub_req_id(lua_State *L, int client_idx, int req_id) {
-    lua_getiuservalue(L, client_idx, DNS_UDUVIDX_ID_SUBS);
+    lua_getiuservalue(L, client_idx, DNS_UV_IDX_ID_SUBS);
     lua_pushnil(L);
     lua_rawseti(L, -2, req_id);
     lua_pop(L, 1); // lua_getiuservalue
 }
 
 static void unqueue_req_id(lua_State *L, int client_idx, int req_id) {
-    lua_getiuservalue(L, client_idx, DNS_UDUVIDX_SEND_QUEUE);
+    lua_getiuservalue(L, client_idx, DNS_UV_IDX_SEND_QUEUE);
 
     ud_dns_client *client = lua_touserdata(L, client_idx);
     int queue_idx = lua_gettop(L);
@@ -439,7 +427,7 @@ static void unqueue_req_id(lua_State *L, int client_idx, int req_id) {
 }
 
 static void queue_push(lua_State *L, ud_dns_client *client) {
-    lua_getiuservalue(L, 1, DNS_UDUVIDX_SEND_QUEUE);
+    lua_getiuservalue(L, 1, DNS_UV_IDX_SEND_QUEUE);
     lua_pushlstring(L, client->buf, client->buf_len);
     lua_rawseti(L, -2, ++(client->queued_n));
     lua_pop(L, 1); // lua_getiuservalue

@@ -17,6 +17,7 @@ static const luaL_Reg http_serv_index[] = {
     { "on_error", http_serv_on_error },
     { "listen", http_serv_listen },
     { "stop", http_serv_gc },
+    { "join", http_serv_join },
     { NULL, NULL }
 };
 

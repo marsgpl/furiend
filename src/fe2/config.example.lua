@@ -1,4 +1,11 @@
 return {
+    id = "fe2",
+    dc = "dc",
+    redis = {
+        ip4 = "172.20.0.3",
+        port = 30303,
+        password = "LocalPassword123",
+    },
     dns = {
         ip4 = "1.1.1.1",
     },
@@ -18,5 +25,5 @@ return {
             ports = { 19001, 19002 },
             port = 19001,
         }
-    }
+    },
 }

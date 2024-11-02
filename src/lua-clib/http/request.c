@@ -27,8 +27,7 @@ int http_request(lua_State *L) {
     lua_pushcfunction(T, request_start);
     lua_xmove(L, T, 1); // conf >> T
 
-    int nres;
-    lua_resume(T, L, 1, &nres); // should yield, 0 nres
+    lua_resume(T, L, 1, &(int){0}); // should yield, 0 nres
 
     return 1; // T
 }
@@ -104,7 +103,7 @@ static int request_start(lua_State *L) {
     luaF_loop_watch(L, fd, EPOLLIN | EPOLLOUT | EPOLLET, 0);
 
     lua_insert(L, 1); // config, req -> req, config
-    lua_setiuservalue(L, 1, HTTP_REQUEST_UDUVIDX_CONFIG); // config >> req
+    lua_setiuservalue(L, 1, HTTP_REQUEST_UV_IDX_CONFIG); // config >> req
 
     return lua_yieldk(L, 0, 0, request_continue);
 }

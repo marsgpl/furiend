@@ -88,12 +88,12 @@ cat dump.txt
 
 ## TODO
 
+- async.race(t1, t2)
 - socket
 - fifo encryption
-- basic dc
 - ci
 - tgbot: hook custom crt + static ip
-- http stress test
+- http stress test + vuln test
 - http serv: req pool
 - http serv: max clients
 - http serv: chunked
@@ -115,4 +115,4 @@ cat dump.txt
 - dns: more types
 - dns: ip6
 - fs: file, dir, stat
-- get rid of yyjson
+- get rid of yyjson?

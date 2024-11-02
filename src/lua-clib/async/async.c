@@ -231,7 +231,9 @@ static void loop_notify_fd_sub(
     int sub_status = lua_resume(sub, L, 2, &sub_nres);
 
     if (unlikely(sub_status == LUA_YIELD)) {
-        lua_pop(sub, sub_nres);
+        if (unlikely(sub_nres > 0)) {
+            lua_pop(sub, sub_nres);
+        }
     } else {
         lua_rawgeti(L, fd_subs_idx, fd);
         if (likely(lua_topointer(L, -1) == sub)) { // still the same

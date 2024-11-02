@@ -464,6 +464,8 @@ void luaF_loop_notify_t_subs(
     int t_status,
     int t_nres
 ) {
+    t_idx = lua_absindex(L, t_idx);
+
     lua_pushvalue(L, t_idx);
     if (unlikely(lua_rawget(L, t_subs_idx) != LUA_TTABLE)) { // no subs
         lua_pop(L, 1); // lua_rawget
@@ -490,17 +492,7 @@ void luaF_loop_notify_t_subs(
         }
 
         lua_xmove(T, sub, t_nres);
-
-        int sub_nres;
-        int sub_status = lua_resume(sub, L, t_nres + 1, &sub_nres);
-
-        if (unlikely(sub_status == LUA_YIELD)) {
-            lua_pop(sub, sub_nres);
-        } else {
-            luaF_loop_notify_t_subs(L, t_subs_idx,
-                sub, sub_idx, sub_status, sub_nres);
-        }
-
+        luaF_resume(L, t_subs_idx, sub, sub_idx, t_nres + 1);
         lua_pop(L, 1); // lua_next
     }
 
@@ -595,4 +587,30 @@ void *luaF_malloc_or_error(lua_State *L, size_t size) {
     }
 
     return buf;
+}
+
+int luaF_resume(
+    lua_State *L,
+    int t_subs_idx,
+    lua_State *T,
+    int t_idx,
+    int t_nargs
+) {
+    if (T == NULL) {
+        return -1; // not a thread
+    }
+
+    int t_nres;
+    int t_status = lua_resume(T, L, t_nargs, &t_nres);
+
+    if (unlikely(t_status == LUA_YIELD)) {
+        if (unlikely(t_nres > 0)) {
+            lua_pop(T, t_nres);
+        }
+        return LUA_YIELD;
+    }
+
+    luaF_loop_notify_t_subs(L, t_subs_idx, T, t_idx, t_status, t_nres);
+
+    return t_status;
 }

@@ -11,3 +11,4 @@
 
 /provision/.env
 /src/fe2/config.lua
+/src/dc/config.lua

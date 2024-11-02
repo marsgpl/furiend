@@ -1,6 +1,8 @@
 package.cpath = "/furiend/src/lua-clib/?/?.so;/usr/local/lib/lua/5.4/?.so"
 
-print "how to install lua cjson: luarocks-5.4 install lua-cjson"
+print "how to install lua cjson:"
+print " luarocks-5.4 config variables.LUA_INCDIR /furiend/vendor/lua-5.4.7/src"
+print " luarocks-5.4 install lua-cjson"
 
 local perf = require "test.perf"
 local cjson = require "cjson"

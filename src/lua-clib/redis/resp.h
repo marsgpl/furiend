@@ -10,6 +10,11 @@
 #define RESP_SEP "\r\n"
 #define RESP_SEP_LEN 2
 
+#define RESP_PUSH_TYPE_IDX 1
+#define RESP_PUSH_CH_NAME_IDX 2
+#define RESP_PUSH_PAYLOAD_IDX 3
+#define RESP_PUSH_RESULT_IDX 3
+
 // https://redis.io/docs/latest/develop/reference/protocol-spec/
 
 // RESP2
