@@ -416,7 +416,8 @@ static int client_process_read(lua_State *L) {
 
 static void client_read(lua_State *L, ud_http_serv_client *client) {
     while (!client->body_ready) {
-        if (unlikely(client->req_len >= client->req_size)) {
+        if (unlikely(client->req_len == client->req_size)) {
+            // req buf is full but headers sep was not found yet
             luaL_error(L, "request headers are too big: %d", client->req_len);
         }
 
@@ -615,10 +616,10 @@ static void client_build_response(lua_State *L, ud_http_serv_client *client) {
         "%s %d %s" SEP "%s" SEP,
         HTTP_VERSION, status_code, status_msg, headers);
 
-    if (unlikely((size_t)written != head_len)) {
+    if (unlikely((size_t)written != client->res_headers_len)) {
         luaF_warning(L,
             "http response headers snprintf failed; written: %d of %d",
-            written, head_len);
+            written, client->res_headers_len);
     }
 
     lua_settop(L, top_idx);

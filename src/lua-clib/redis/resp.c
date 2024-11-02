@@ -22,6 +22,10 @@ static size_t parse_len(const char *buf, size_t buf_len, int64_t *len) {
             return 0;
         }
 
+        if (unlikely(neg)) {
+            *len *= -1;
+        }
+
         return parsed;
     }
 

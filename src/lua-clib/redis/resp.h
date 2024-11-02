@@ -30,7 +30,10 @@
 #define RESP_SET '~'
 #define RESP_PUSH '>'
 
-void resp_pack(lua_State *L, luaF_strbuf *sb, int index);
+void resp_pack(
+    lua_State *L,
+    luaF_strbuf *sb,
+    int index);
 
 size_t resp_unpack(
     lua_State *L,

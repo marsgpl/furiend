@@ -1,5 +1,3 @@
-#!/furiend/bin/lua
-
 warn "@on"
 
 package.path = "/furiend/?.lua;/furiend/src/lua-lib/?.lua"

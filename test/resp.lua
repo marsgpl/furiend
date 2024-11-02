@@ -57,7 +57,7 @@ local unpack_samples = {
     {
         "|1\r\n+key-popularity\r\n%2\r\n$1\r\na\r\n"
         .. ",0.1923\r\n$1\r\nb\r\n,0.0012\r\n*2\r\n:1\r\n:2\r\n",
-        {1,2},
+        { 1, 2 },
         redis.type.ARR,
         {
             ["key-popularity"] = {
@@ -118,7 +118,7 @@ return function()
 
         trace(buffer)
 
-        local data, t = redis.unpack(buffer)
+        local data, t = redis:unpack(buffer)
         local meta = type(data) == "table" and getmetatable(data) or nil
 
         if meta then
@@ -134,7 +134,7 @@ return function()
     perf("resp unpack")
 
     perf()
-        local packet = redis.pack(pack_sample)
+        local packet = redis:pack(pack_sample)
         trace(packet)
         trace(packet_sample)
         assert(equal(packet, packet_sample))

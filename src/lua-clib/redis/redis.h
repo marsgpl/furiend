@@ -70,8 +70,8 @@ static int query_continue(lua_State *L, int status, lua_KContext ctx);
 
 static const luaL_Reg redis_index[] = {
     { "client", redis_client },
-    { "pack", redis_client },
-    { "unpack", redis_client },
+    { "pack", redis_pack },
+    { "unpack", redis_unpack },
     { "type", NULL },
     { NULL, NULL }
 };

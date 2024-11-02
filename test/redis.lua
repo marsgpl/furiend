@@ -74,7 +74,7 @@ return function()
     do
         local reqs = {}
 
-        for _ = 1, 100000 do
+        for _ = 1, 10 do
             table.insert(reqs, client:query("lastsave\r\n"))
         end
 

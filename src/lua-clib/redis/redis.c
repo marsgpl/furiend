@@ -57,19 +57,20 @@ int redis_pack(lua_State *L) {
 
     ud_redis *redis = luaL_checkudata(L, 1, MT_REDIS);
     luaF_strbuf *sb = &redis->pack_buf;
+    sb->filled = 0;
 
-    resp_pack(L, sb, 1);
+    resp_pack(L, sb, 2);
     lua_pushlstring(L, sb->buf, sb->filled);
 
     return 1;
 }
 
 int redis_unpack(lua_State *L) {
-    luaF_need_args(L, 1, "redis.unpack");
-    luaL_checktype(L, 1, LUA_TSTRING);
+    luaF_need_args(L, 2, "redis.unpack");
+    luaL_checktype(L, 2, LUA_TSTRING);
 
     size_t len;
-    const char *buf = lua_tolstring(L, 1, &len);
+    const char *buf = lua_tolstring(L, 2, &len);
 
     if (unlikely(len > INT_MAX)) {
         luaL_error(L, "buffer is too big: %d; max: %d", len, INT_MAX);
@@ -365,7 +366,10 @@ static void router_read(
         lua_settop(L, top);
         luaF_strbuf_ensure_space(L, sb, RECV_BUF_MIN_SIZE);
 
-        ssize_t read = luaF_strbuf_recv(L, sb, client->fd, 0);
+        ssize_t read = recv(client->fd,
+            sb->buf + sb->filled,
+            sb->capacity - sb->filled,
+            0);
 
         if (unlikely(read == 0)) {
             luaL_error(L, "server dropped out during client read");
@@ -377,6 +381,8 @@ static void router_read(
             }
             return; // try to read again later
         }
+
+        sb->filled += read;
 
         size_t parsed = router_parse(L, client, t_subs_idx);
 
@@ -605,6 +611,7 @@ int redis_subscribe(lua_State *L) {
 
     ud_redis_client *client = luaL_checkudata(L, 1, MT_REDIS_CLIENT);
     luaF_strbuf *sb = &client->pack_buf;
+    sb->filled = 0;
 
     resp_pack(L, sb, 2);
     lua_pushlstring(L, sb->buf, sb->filled); // ud, table, query
@@ -637,6 +644,7 @@ int redis_unsubscribe(lua_State *L) {
 
     ud_redis_client *client = luaL_checkudata(L, 1, MT_REDIS_CLIENT);
     luaF_strbuf *sb = &client->pack_buf;
+    sb->filled = 0;
 
     resp_pack(L, sb, 2);
     lua_pushlstring(L, sb->buf, sb->filled); // ud, table, query
@@ -666,6 +674,7 @@ int redis_publish(lua_State *L) {
 
     ud_redis_client *client = luaL_checkudata(L, 1, MT_REDIS_CLIENT);
     luaF_strbuf *sb = &client->pack_buf;
+    sb->filled = 0;
 
     resp_pack(L, sb, 2);
     lua_pushlstring(L, sb->buf, sb->filled); // ud, table, query

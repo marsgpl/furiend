@@ -66,14 +66,11 @@ cmake ..
 cmake --build .
 ```
 
-## cjson
+## luarocks
 
 ```sh
-mkdir -p /furiend/vendor && cd /furiend/vendor
-git clone https://github.com/mpx/lua-cjson.git
-cd lua-cjson
-sed -i "s/_CFLAGS =/_CFLAGS = \-I\/furiend\/vendor\/lua-5.4.7\/src/" Makefile
-make
+luarocks-5.4 config variables.LUA_INCDIR /furiend/vendor/lua-5.4.7/src
+luarocks-5.4 install lua-cjson
 ```
 
 ## segfaults, leaks
@@ -81,13 +78,16 @@ make
 ```sh
 find src -type f -name *.o | xargs rm
 build && while tests; do :; done
-gdb --args lua segf.lua # r, bt 100, q, y
+gdb --args lua test/tests.lua # r, bt 100, q, y
 valgrind --leak-check=full --show-leak-kinds=all -s tests
+tcpflow -c port 30303 > dump.txt &
+build && tests
+killall -9 tcpflow
+cat dump.txt
 ```
 
 ## TODO
 
-- reduce allocs
 - socket
 - fifo encryption
 - basic dc

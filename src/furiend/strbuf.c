@@ -78,28 +78,6 @@ void luaF_strbuf_append(
     sb->filled += data_len;
 }
 
-ssize_t luaF_strbuf_recv(
-    lua_State *L,
-    luaF_strbuf *sb,
-    int fd,
-    int flags
-) {
-    if (unlikely(sb->buf == NULL)) {
-        luaL_error(L, "strbuf recv: buf is not allocated");
-    }
-
-    ssize_t read = recv(fd,
-        sb->buf + sb->filled,
-        sb->capacity - sb->filled,
-        flags);
-
-    if (likely(read > 0)) {
-        sb->filled += read;
-    }
-
-    return read;
-}
-
 void luaF_strbuf_shift(
     lua_State *L,
     luaF_strbuf *sb,
@@ -109,10 +87,10 @@ void luaF_strbuf_shift(
         luaL_error(L, "strbuf recv: buf is not allocated");
     }
 
-    if (unlikely(shift_bytes < sb->filled)) {
+    if (unlikely(sb->filled < shift_bytes)) {
         luaL_error(L, "strbuf filled < shift; filled: %d; shift: %d",
             sb->filled, shift_bytes);
-    } else if (likely(shift_bytes == sb->filled)) {
+    } else if (likely(sb->filled == shift_bytes)) {
         sb->filled = 0;
     } else {
         memmove(sb->buf,
