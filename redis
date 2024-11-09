@@ -23,7 +23,6 @@ else # not created
         --network furiend \
         --hostname redis \
         --ip 172.20.0.3 \
-        --env ENV=/root/.profile \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \

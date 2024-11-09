@@ -1,7 +1,7 @@
 local async = require "async"
 local wait = async.wait
 local json = require "json"
-local next_id = require "lib.next-id"
+local next_id = require "lib.next_id"
 local log = require "log"
 
 return function(dc, event)

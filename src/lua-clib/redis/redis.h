@@ -57,6 +57,7 @@ int redis_subscribe(lua_State *L);
 int redis_publish(lua_State *L);
 int redis_unsubscribe(lua_State *L);
 
+static void error_if_dead(lua_State *L);
 static int connect_start(lua_State *L);
 static int connect_continue(lua_State *L, int status, lua_KContext ctx);
 static int router_start(lua_State *L);
@@ -85,7 +86,7 @@ static const luaL_Reg redis_index[] = {
     { "client", redis_client },
     { "pack", redis_pack },
     { "unpack", redis_unpack },
-    { "type", NULL },
+    { "type", NULL }, // just reserve space
     { NULL, NULL }
 };
 

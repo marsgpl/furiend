@@ -10,23 +10,31 @@ local log = require "log"
 local time = require "time"
 local json = require "json"
 local logic = require "lib.logic"
+local world = require "lib.world"
 
 local config = require "config"
 
 loop(function()
-    local rc = redis.client(config.redis)
+    log("started")
 
-    local dc = {
-        cmd_ids = {},
-        config = config,
-        rc = rc,
-    }
+    local rc = redis.client(config.redis)
 
     wait(rc:connect())
     log("connected to redis", config.redis.ip4, config.redis.port)
 
     wait(rc:hello(config.redis))
     log("redis authorized", config.redis.client_name)
+
+    local dc = {
+        cmd_ids = {},
+        config = config,
+        rc = rc,
+        world = world {
+            rc = rc,
+        },
+    }
+
+    log("world loaded", dc.world:stat())
 
     wait(rc:subscribe(config.id, function(push)
         local event = json.parse(push)
@@ -36,7 +44,7 @@ loop(function()
     log("redis subscribed", config.id)
 
     logic(dc, {
-        from = config.id,
+        -- from is empty for dc
         type = "start",
         time = time(),
     })

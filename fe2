@@ -22,9 +22,7 @@ else # not created
         --workdir /furiend \
         --network furiend \
         --hostname fe2 \
-        --ip 172.20.0.5 \
-        --env ENV=/root/.profile \
-        --env IN_DOCKER=true \
+        --ip 172.20.0.12 \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \

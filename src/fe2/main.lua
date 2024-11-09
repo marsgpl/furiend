@@ -9,10 +9,11 @@ local redis = require "redis"
 local log = require "log"
 local json = require "json"
 local dns = require "dns"
-local tgbot = require "telegram-bot"
-local tgwh = require "telegram-bot-webhook"
-local is_dc_cmd = require "lib.is-dc-cmd"
-local is_tg_event = require "lib.is-tg-event"
+local waitall = require "waitall"
+local tgbot = require "telegram_bot"
+local tgwh = require "telegram_bot_webhook"
+local is_dc_cmd = require "lib.is_dc_cmd"
+local is_tg_event = require "lib.is_tg_event"
 
 local config = require "config"
 local in_docker = os.getenv("IN_DOCKER")
@@ -24,8 +25,13 @@ loop(function()
     local tg -- telegram bot api
     local wh -- telegram bot web hook
 
-    local dc = function(event)
-        event.from = config.id
+    local dc = function(type, payload)
+        local event = {
+            type = type,
+            from = config.id,
+            payload = payload,
+        }
+
         wait(rc:publish(config.dc, json.stringify(event)))
     end
 
@@ -36,7 +42,7 @@ loop(function()
         local result = tg:request("POST", push.cmd, push.body)
 
         log("cmd ok", push.cmd_id)
-        dc { type = "cmd_ok", cmd_id = push.cmd_id, result = result }
+        dc("cmd_ok",  { cmd_id = push.cmd_id, result = result })
     end
 
     local on_push_safe = function(push)
@@ -45,7 +51,7 @@ loop(function()
 
         if not ok then
             log("push error", errmsg, push)
-            dc { type = "push error", push = push, error = errmsg }
+            dc("push_error", { push = push, error = errmsg })
         end
     end
 
@@ -62,7 +68,7 @@ loop(function()
     wait(rc:subscribe(config.id, on_push_safe))
     log("redis subscribed", config.id)
 
-    dc { type = "start" }
+    dc "start"
 
     -- tgwh
 
@@ -86,19 +92,19 @@ loop(function()
         end
 
         log("tg event", event.update_id)
-        dc { type = "tg_event", event = event }
+        dc("tg_event", { event = event })
     end
 
-    wh_conf.on_error = function(req, errmsg)
-        log("tg error", errmsg, req)
-        dc { type = "tg_error", error = errmsg, req = req }
+    wh_conf.on_error = function(req, err)
+        log("tg error", err, req)
+        dc("tg_error", { error = err, req = req })
     end
 
     wh = tgwh(wh_conf)
     wh:listen()
 
-    log("tgwh is listening", wh_conf.ip4, wh_conf.port)
-    dc { type = "tg_start" }
+    log("tgwh is listening on", wh_conf.ip4, wh_conf.port)
+    dc "tgwh_start"
 
     -- get me
 
@@ -107,19 +113,21 @@ loop(function()
     log("id", me.id)
     log("username", me.username)
     log("display name", me.first_name)
-    dc { type = "tg_me", me = me }
+    dc("tg_me", { me = me })
 
     -- set webhook
 
     tg:set_webhook(wh_conf)
-    log("tgwh set", wh_conf.url)
+    log("tg wh set", wh_conf.url)
 
     local wh_info = tg:get_webhook_info()
     log("tgwh pending updates", wh_info.pending_update_count)
-    dc { type = "tg_wh_info", info = wh_info }
+    dc("tg_wh_info", { info = wh_info })
 
     -- wait for graceful shutdown
 
-    wait(rc:join()) -- TODO: migrate to race
-    -- race(rc:join(), wh:join())
+    waitall(
+        rc:join(),
+        wh:join()
+    )
 end)

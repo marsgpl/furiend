@@ -1,0 +1,357 @@
+:root {
+    --input-height: 38px;
+    --popup-header-height: 48px;
+    --panel-width: 500px;
+    --outline: 1px solid rgba(255, 255, 255, .5);
+    --input-bg: rgba(0, 0, 0, .2);
+    --input-bg-hover: rgba(0, 0, 0, .3);
+    --input-bg-active: rgba(0, 0, 0, .4);
+    --triangle: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="m0 0 8 8 8-8" fill="white"/></svg>');
+    --select-triangle: var(--triangle) no-repeat right 10px top 17px / 10px;
+}
+
+body {
+    background: #292c32;
+    color: #ddd;
+}
+
+html, input, select, button {
+    font-family: sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 300;
+}
+
+input, select, button {
+    border: none;
+    color: #ddd;
+    display: inline-block;
+    vertical-align: top;
+    height: var(--input-height);
+    line-height: calc(var(--input-height) - 4 * 2);
+    box-sizing: border-box;
+    padding: 4px 14px;
+    border-radius: 3px;
+    outline: none;
+}
+
+input:not([disabled]) {
+    background: rgba(0, 0, 0, .15);
+    cursor: text;
+}
+
+input:not([disabled]):hover {
+    background: rgba(0, 0, 0, .2);
+}
+
+input[disabled] {
+    background: transparent;
+}
+
+select {
+    user-select: none;
+    padding-right: 30px;
+    appearance: none;
+    background: var(--select-triangle), var(--input-bg);
+}
+
+select:not([disabled]):hover {
+    background: var(--select-triangle), var(--input-bg-hover);
+}
+
+select:not([disabled]):active {
+    background: var(--select-triangle), var(--input-bg-active);
+}
+
+button {
+    user-select: none;
+    text-align: center;
+    background: var(--input-bg);
+}
+
+button:not([disabled]):hover { background: var(--input-bg-hover); }
+button:not([disabled]):active { background: var(--input-bg-active); }
+
+button.nobg,
+button.nobg:hover,
+button.nobg:active {
+    background: transparent;
+}
+
+select:not([disabled]),
+button:not([disabled]) {
+    cursor: pointer;
+}
+
+#canvas {
+    user-select: none;
+    position: fixed;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+}
+
+#canvas-actions {
+    position: fixed;
+    z-index: 2;
+    display: flex;
+}
+
+#add {
+    margin-left: 5px;
+}
+
+circle {
+    cursor: grab;
+}
+
+circle:active,
+#canvas:active {
+    cursor: grabbing;
+}
+
+circle.object { fill: #52b5d9; }
+circle.class { fill: #ef61b5; }
+circle.error { fill: red !important; }
+
+text {
+    cursor: pointer;
+    fill: #ccc;
+}
+
+line {
+    stroke-width: 1;
+    stroke: #888;
+}
+
+g g:hover { opacity: .8; }
+g g:active { opacity: .6; }
+
+.popup {
+    display: none;
+    z-index: 1000;
+    position: fixed;
+    background: #30343d;
+}
+
+.popup .row + .row {
+    margin-top: 5px;
+}
+
+.popup-title {
+    user-select: none;
+    font-weight: normal;
+    text-align: center;
+    line-height: var(--popup-header-height);
+    margin: 0 var(--popup-header-height);
+    padding: 0 5px;
+}
+
+.popup-body {
+    box-sizing: border-box;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - var(--popup-header-height));
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.popup-close {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: calc(var(--popup-header-height) - 2px);
+    height: calc(var(--popup-header-height) - 2px);
+}
+
+.popup-close::before,
+.popup-close::after {
+    content: '';
+    display: block;
+    width: 16px;
+    height: 1px;
+    background: white;
+    position: absolute;
+    top: 23px;
+    left: 16px;
+}
+
+.popup-close::before { transform: rotate(45deg); }
+.popup-close::after { transform: rotate(-45deg); }
+
+.popup-msg {
+    margin: 30px 30px 0;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+#panel .row {
+    user-select: none;
+    display: grid;
+    column-gap: 5px;
+    grid-template-columns: 80px 1fr 48px;
+}
+
+#panel .row.error {
+    background: rgba(255, 0, 0, .08);
+}
+
+#panel .row .key {
+    text-align: right;
+    padding-left: 10px;
+}
+
+#panel .row .value {
+    padding-left: 5px;
+}
+
+#panel .row .key,
+#panel .row .value {
+    line-height: var(--input-height);
+    color: #ddd;
+}
+
+#panel .row .edit {
+    padding: 0;
+}
+
+#panel .errors {
+    margin: 25px 20px 0;
+    padding: 20px;
+    border: 1px solid red;
+    border-radius: 5px;
+}
+
+.rel {
+    user-select: none;
+    outline: none;
+    border-radius: 3px;
+}
+
+.rel:hover { color: rgba(255, 255, 255, .9); }
+.rel:active { color: rgba(255, 255, 255, .8); }
+
+#panel .row:hover {
+    background: rgba(255, 255, 255, .03);
+}
+
+#popup .row {
+    user-select: none;
+}
+
+#popup .row div.key {
+    box-sizing: border-box;
+    padding: 6px 2px;
+}
+
+#popup .row .value {
+    width: 100%;
+}
+
+#popup .row.kv {
+    display: flex;
+}
+
+#popup .row.kv .key {
+    width: 108px;
+    flex-shrink: 0;
+}
+
+#popup .row.kv .value {
+    margin-left: 5px;
+    flex-grow: 1;
+}
+
+#popup .row.kv .x {
+    margin-left: 5px;
+    flex-shrink: 0;
+}
+
+.popup .actions {
+    user-select: none;
+    margin-top: 30px;
+    display: flex;
+    justify-content: end;
+}
+
+.popup .actions button {
+    flex-shrink: 0;
+}
+
+.popup .actions button + button {
+    margin-left: 8px;
+}
+
+.popup .space {
+    user-select: none;
+    flex-grow: 1;
+}
+
+#popup-shadow {
+    user-select: none;
+    display: none;
+    z-index: 999;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: rgba(0, 0, 0, .5);
+}
+
+#panel {
+    z-index: 500;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--panel-width);
+}
+
+#panel .popup-body {
+    box-sizing: border-box;
+    padding: 5px;
+}
+
+#popup {
+    top: 10%;
+    left: 50%;
+    width: 480px;
+    transform: translateX(-50%);
+    border-radius: 3px;
+}
+
+#submit-error {
+    line-height: 20px;
+    box-sizing: border-box;
+    padding: calc((var(--input-height) - 20px) / 2) 10px;
+    max-height: calc(var(--input-height) * 3);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+@media only screen and (max-width: 500px) { /* --panel-width */
+    #panel {
+        width: 100%;
+        left: 0;
+    }
+}
+
+.popup-title,
+#popup .row div.key,
+#popup .row .text,
+#panel .row .key,
+#panel .row .value,
+button {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rel:focus,
+input:focus,
+select:focus,
+button:focus {
+    outline: var(--outline);
+}

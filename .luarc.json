@@ -1,5 +1,8 @@
 {
     "diagnostics.globals": [],
+    "diagnostics.neededFileStatus": {
+        "trailing-space": "None"
+    },
     "runtime": {
         "path": [
             "/Users/marsgpl/projects/furiend/?.lua",

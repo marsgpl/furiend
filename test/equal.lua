@@ -66,7 +66,7 @@ local bad = {
     {{t,{1,2}}}, {{t,{true,2}}},
 }
 
-return function ()
+return function()
     for i = 1, #good, 2 do
         local a = good[i]
         local b = good[i + 1]

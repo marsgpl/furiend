@@ -118,7 +118,7 @@ static int dns_resolve_continue(lua_State *L, int status, lua_KContext ctx) {
         unqueue_req_id(L, 1, req_id);
 
         if (lua_type(L, -1) == LUA_TNUMBER) {
-            lua_pushstring(L, "timeout");
+            lua_pushliteral(L, "timeout");
         } // else it is loop.gc error
 
         return lua_error(L);
@@ -145,7 +145,7 @@ static int dns_client(lua_State *L) {
     lua_Number tmt = luaL_optnumber(L, 4, DNS_DEFAULT_TIMEOUT);
     int parallel = lua_toboolean(L, 5);
 
-    ud_dns_client *client = luaF_new_uduv_or_error(L, sizeof(ud_dns_client), 2);
+    ud_dns_client *client = luaF_new_ud_or_error(L, sizeof(ud_dns_client), 2);
 
     lua_createtable(L, 0, 2);
     lua_setiuservalue(L, -2, DNS_UV_IDX_ID_SUBS);

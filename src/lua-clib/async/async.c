@@ -29,7 +29,7 @@ int async_loop(lua_State *L) {
     lua_insert(L, 1); // fn, T -> T, fn
     lua_xmove(L, T, 1); // fn >> T
 
-    ud_loop *loop = luaF_new_uduv_or_error(L, sizeof(ud_loop), 0);
+    ud_loop *loop = luaF_new_ud_or_error(L, sizeof(ud_loop), 0);
 
     int fd = epoll_create1(0);
 

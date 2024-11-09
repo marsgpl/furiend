@@ -12,16 +12,28 @@ docker builder build --tag furiend:latest docker
 
 ./shell
 ./redis
+./dc
+./fe1
+./fe2
 
 docker network ls
 docker image ls -a
 docker container ls
 
-docker container stop furiend_shell furiend_redis
-docker container rm furiend_shell furiend_redis
+docker container stop furiend_shell furiend_redis furiend_dc furiend_fe1 furiend_fe2
+docker container rm furiend_shell furiend_redis furiend_dc furiend_fe1 furiend_fe2
 docker image rm furiend
 docker network rm furiend
 ```
+
+## net map
+
+- 172.20.0.1 - gateway
+- 172.20.0.2 - shell
+- 172.20.0.3 - redis - 30303
+- 172.20.0.10 - dc
+- 172.20.0.11 - fe1 - 18001
+- 172.20.0.12 - fe2 - 19001
 
 ## Lua
 
@@ -52,7 +64,7 @@ mkdir -p /furiend/data
 ```
 
 ```sh
-REDISCLI_AUTH=LocalPassword123 redis-cli -u redis://redis:30303/0
+REDISCLI_AUTH=LocalPassword123 redis-cli -3 -u redis://redis:30303/0
 ```
 
 ## yyjson
@@ -114,5 +126,4 @@ cat dump.txt
 - cookies
 - dns: more types
 - dns: ip6
-- fs: file, dir, stat
 - get rid of yyjson?

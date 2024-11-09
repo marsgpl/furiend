@@ -105,7 +105,7 @@ void luaF_set_ip4_port(
     const char *ip4,
     int port);
 lua_State *luaF_new_thread_or_error(lua_State *L);
-void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n);
+void *luaF_new_ud_or_error(lua_State *L, size_t size, int uv_n);
 const char *luaF_status_label(int status);
 const char *luaF_escape_string(
     lua_State *L,

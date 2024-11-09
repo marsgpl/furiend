@@ -358,7 +358,7 @@ lua_State *luaF_new_thread_or_error(lua_State *L) {
     return T;
 }
 
-void *luaF_new_uduv_or_error(lua_State *L, size_t size, int uv_n) {
+void *luaF_new_ud_or_error(lua_State *L, size_t size, int uv_n) {
     void *ud = lua_newuserdatauv(L, size, uv_n);
 
     if (unlikely(ud == NULL)) {

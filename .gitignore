@@ -10,5 +10,6 @@
 *.luac
 
 /provision/.env
-/src/fe2/config.lua
 /src/dc/config.lua
+/src/fe1/config.lua
+/src/fe2/config.lua

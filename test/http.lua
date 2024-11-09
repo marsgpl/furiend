@@ -1,4 +1,4 @@
-local resolve_host = require "http-dns-resolver"
+local http_dns_resolve = require "http_dns_resolve"
 local perf = require "test.perf"
 local trace = require "trace"
 local http = require "http"
@@ -49,7 +49,7 @@ return function()
 
     perf()
         local host = "lua.org"
-        local addr = resolve_host(host)
+        local addr = http_dns_resolve(host)
         trace("host:", host)
         trace("addr:", addr)
     perf("dns https resolve")

@@ -3,7 +3,7 @@
 reset
 clear
 
-NAME=furiend_shell
+NAME=furiend_fe1
 RUNNING=$(docker container list --filter name=$NAME --quiet)
 STOPPED=$(docker container list --all --filter name=$NAME --quiet)
 
@@ -21,11 +21,13 @@ else # not created
         --name $NAME \
         --workdir /furiend \
         --network furiend \
-        --hostname shell \
-        --ip 172.20.0.2 \
+        --hostname fe1 \
+        --ip 172.20.0.11 \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \
-        --entrypoint /bin/sh \
-        furiend
+        --entrypoint /furiend/bin/lua \
+        --publish 127.0.0.1:18001:18001 \
+        furiend \
+        /furiend/src/fe1/main.lua
 fi

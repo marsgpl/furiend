@@ -141,9 +141,9 @@ static yyjson_mut_val *json_stringify_value(
         } case LUA_TTABLE:
             return json_stringify_table(L, doc, index, cache_index);
         default: // LUA_TFUNCTION LUA_TTHREAD LUA_TUSERDATA LUA_TLIGHTUSERDATA
-            luaL_error(L, "type is not supported; type: %s",
+            luaF_warning(L, "json.stringify: type is not supported; type: %s",
                 luaL_typename(L, index));
-            return NULL; // make typecheck happy (luaL_error longjmp)
+            return yyjson_mut_null(doc);
     }
 }
 

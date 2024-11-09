@@ -26,7 +26,7 @@ int http_serv(lua_State *L) {
     luaF_need_args(L, 1, "http server");
     luaL_checktype(L, 1, LUA_TTABLE); // conf
 
-    ud_http_serv *serv = luaF_new_uduv_or_error(L,
+    ud_http_serv *serv = luaF_new_ud_or_error(L,
         sizeof(ud_http_serv), SERV_UV_IDX_N);
 
     serv->fd = -1;
@@ -131,7 +131,7 @@ int http_serv_res_set_status(lua_State *L) {
     luaL_checktype(L, 2, LUA_TNUMBER);
 
     if (lua_gettop(L) < 3) {
-        lua_pushstring(L, "");
+        lua_pushliteral(L, "");
     } else {
         luaL_checktype(L, 3, LUA_TSTRING);
     }
@@ -300,7 +300,7 @@ static void listen_accept(lua_State *L, ud_http_serv *serv) {
 
         lua_pushinteger(T, 200);
         lua_setfield(T, res_idx, "status_code");
-        lua_pushstring(T, "OK");
+        lua_pushliteral(T, "OK");
         lua_setfield(T, res_idx, "status_message");
 
         // start
@@ -321,13 +321,13 @@ static int client_start(lua_State *L) {
     ud_http_serv_client *client = lua_newuserdatauv(L,
         sizeof(ud_http_serv_client), 1);
 
-    lua_getiuservalue(L, CLIENT_SERV_IDX, SERV_UV_IDX_CLIENTS);
-    lua_setiuservalue(L, CLIENT_CLIENT_IDX, CLIENT_UV_IDX_CLIENTS);
-
     if (unlikely(client == NULL)) {
         luaF_close_or_warning(L, fd);
         luaF_error_errno(L, "lua_newuserdatauv failed: MT_HTTP_SERV_CLIENT");
     }
+
+    lua_getiuservalue(L, CLIENT_SERV_IDX, SERV_UV_IDX_CLIENTS);
+    lua_setiuservalue(L, CLIENT_CLIENT_IDX, CLIENT_UV_IDX_CLIENTS);
 
     client->fd = fd;
     client->body_ready = 0;
@@ -563,17 +563,17 @@ static void client_build_response(lua_State *L, ud_http_serv_client *client) {
     }
 
     if (unlikely(!lua_isstring(L, top_idx + 2))) {
-        lua_pushstring(L, "Internal Server Error");
+        lua_pushliteral(L, "Internal Server Error");
         lua_replace(L, top_idx + 2);
     }
 
     if (unlikely(!lua_isstring(L, top_idx + 3))) {
-        lua_pushstring(L, "");
+        lua_pushliteral(L, "");
         lua_replace(L, top_idx + 3);
     }
 
     if (unlikely(!lua_isstring(L, top_idx + 4))) {
-        lua_pushstring(L, "");
+        lua_pushliteral(L, "");
         lua_replace(L, top_idx + 4);
     }
 
@@ -586,7 +586,7 @@ static void client_build_response(lua_State *L, ud_http_serv_client *client) {
     const char *headers = lua_tolstring(L, top_idx + 4, &headers_len);
 
     lua_pushfstring(L, "%s: %d" SEP, HTTP_HDR_CONTENT_LEN, body_len);
-    lua_pushstring(L, HTTP_HDR_CONN_CLOSE_SEP);
+    lua_pushliteral(L, HTTP_HDR_CONN_CLOSE_SEP);
     lua_concat(L, 3);
     headers = lua_tolstring(L, top_idx + 4, &headers_len);
 
@@ -714,7 +714,7 @@ static int on_request_finish(lua_State *L, int status, lua_KContext ctx) {
         lua_setfield(L, CLIENT_RES_IDX, "headers");
         lua_pushinteger(L, 500);
         lua_setfield(L, CLIENT_RES_IDX, "status_code");
-        lua_pushstring(L, "Internal Server Error");
+        lua_pushliteral(L, "Internal Server Error");
         lua_setfield(L, CLIENT_RES_IDX, "status_message");
         lua_pushnil(L);
         lua_setfield(L, CLIENT_RES_IDX, "body");

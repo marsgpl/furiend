@@ -12,6 +12,7 @@ LUAMOD_API int luaopen_redis(lua_State *L) {
 
     lua_pushcfunction(L, redis_gc);
     lua_setfield(L, -2, "__gc");
+
     luaL_newlib(L, redis_index);
 
     lua_createtable(L, 0, 15);
@@ -34,7 +35,7 @@ LUAMOD_API int luaopen_redis(lua_State *L) {
 
     lua_setfield(L, -2, "__index");
 
-    ud_redis *redis = luaF_new_uduv_or_error(L, sizeof(ud_redis), 0);
+    ud_redis *redis = luaF_new_ud_or_error(L, sizeof(ud_redis), 0);
 
     redis->pack_buf = luaF_strbuf_create(PACK_BUF_START_SIZE);
 
@@ -93,7 +94,7 @@ int redis_client(lua_State *L) {
     luaF_need_args(L, 1, "redis.client");
     luaL_checktype(L, 1, LUA_TTABLE);
 
-    ud_redis_client *client = luaF_new_uduv_or_error(L,
+    ud_redis_client *client = luaF_new_ud_or_error(L,
         sizeof(ud_redis_client), REDIS_UV_IDX_N);
 
     client->fd = -1;
@@ -139,16 +140,15 @@ int redis_client_gc(lua_State *L) {
     lua_getiuservalue(L, 1, REDIS_UV_IDX_Q_SUBS);
     lua_rawgeti(L, LUA_REGISTRYINDEX, F_RIDX_LOOP_T_SUBS);
 
+    int errmsg_idx = 2;
     int q_subs_idx = 3;
     int t_subs_idx = 4;
 
     lua_getiuservalue(L, 1, REDIS_UV_IDX_CONN_THREAD);
-    luaF_resume(L, t_subs_idx, lua_tothread(L, -1), -1, 0);
+    lua_rawseti(L, q_subs_idx, -1);
 
     lua_getiuservalue(L, 1, REDIS_UV_IDX_JOIN_THREAD);
-    luaF_resume(L, t_subs_idx, lua_tothread(L, -1), -1, 0);
-
-    lua_settop(L, t_subs_idx);
+    lua_rawseti(L, q_subs_idx, -2);
 
     lua_pushnil(L);
     while (lua_next(L, q_subs_idx)) {
@@ -156,8 +156,8 @@ int redis_client_gc(lua_State *L) {
         lua_State *sub = lua_tothread(L, sub_idx);
 
         lua_pushboolean(sub, 0);
-        lua_pushstring(sub, lua_isstring(L, 2)
-            ? lua_tostring(L, 2) // gc called from router
+        lua_pushstring(sub, lua_isstring(L, errmsg_idx)
+            ? lua_tostring(L, errmsg_idx) // gc called from router
             : "redis.client.gc called");
         lua_pushinteger(sub, 0); // fake type
 
@@ -252,21 +252,12 @@ static int connect_continue(lua_State *L, int status, lua_KContext ctx) {
     (void)ctx;
     (void)status;
 
-    ud_redis_client *client = lua_touserdata(L, 1);
-    int code = get_socket_error_code(client->fd);
-
-    if (unlikely(client->fd == -1)) {
-        return 0;
-    }
+    error_if_dead(L);
 
     lua_pushnil(L);
     lua_setiuservalue(L, 1, REDIS_UV_IDX_CONN_THREAD);
 
-    if (unlikely(code != 0)) {
-        luaF_push_error_socket(L, client->fd, "connection failed", code);
-        lua_error(L);
-    }
-
+    ud_redis_client *client = lua_touserdata(L, 1);
     client->connected = 1;
 
     return 0;
@@ -291,9 +282,6 @@ static int router_continue(lua_State *L, int status, lua_KContext ctx) {
     if (unlikely(status != LUA_OK)) {
         lua_insert(L, 2); // client, ? <- err msg
         lua_settop(L, 2); // client, err msg
-
-        luaF_warning(L, "redis router error: %s", lua_tostring(L, -1));
-
         return redis_client_gc(L);
     }
 
@@ -582,14 +570,9 @@ static void router_process_send_buf(lua_State *L, ud_redis_client *client) {
 
 static int query_continue(lua_State *L, int status, lua_KContext ctx) {
     (void)ctx;
+    (void)status;
 
-    status = lua_toboolean(L, -3);
-    int type = lua_tointeger(L, -1);
-
-    if (unlikely(!status || type == RESP_ERR || type == RESP_BULK_ERR)) {
-        lua_pop(L, 1); // -type
-        lua_error(L); // -1 = err msg
-    }
+    error_if_dead(L);
 
     return 2; // data, type
 }
@@ -609,7 +592,7 @@ int redis_subscribe(lua_State *L) {
     lua_createtable(L, 2, 0);
     lua_insert(L, 2); // ud, table, ch_name
 
-    lua_pushstring(L, "SUBSCRIBE");
+    lua_pushliteral(L, "SUBSCRIBE");
     lua_rawseti(L, 2, 1); // table[1] = "subscribe"
     lua_rawseti(L, 2, 2); // table[2] = ch_name
 
@@ -642,7 +625,7 @@ int redis_unsubscribe(lua_State *L) {
     lua_createtable(L, 2, 0);
     lua_insert(L, 2); // ud, table, ch_name
 
-    lua_pushstring(L, "UNSUBSCRIBE");
+    lua_pushliteral(L, "UNSUBSCRIBE");
     lua_rawseti(L, 2, 1); // table[1] = "unsubscribe"
     lua_rawseti(L, 2, 2); // table[2] = ch_name
 
@@ -671,7 +654,7 @@ int redis_publish(lua_State *L) {
     lua_insert(L, 2); // ud, table, ch_name, payload
     lua_insert(L, 3); // ud, table, payload, ch_name
 
-    lua_pushstring(L, "PUBLISH");
+    lua_pushliteral(L, "PUBLISH");
     lua_rawseti(L, 2, 1); // table[1] = "publish"
     lua_rawseti(L, 2, 2); // table[2] = ch_name
     lua_rawseti(L, 2, 3); // table[3] = payload
@@ -754,7 +737,7 @@ int redis_hello(lua_State *L) {
 
 int redis_ping(lua_State *L) {
     luaF_need_args(L, 1, "ping"); // ud
-    lua_pushstring(L, "PING" RESP_SEP); // ud, q
+    lua_pushliteral(L, "PING" RESP_SEP); // ud, q
 
     lua_State *T = luaF_new_thread_or_error(L); // ud, q, t
 
@@ -794,8 +777,35 @@ static int join_start(lua_State *L) {
 }
 
 static int join_continue(lua_State *L, int status, lua_KContext ctx) {
-    (void)L;
     (void)status;
     (void)ctx;
+
+    error_if_dead(L);
+
     return 0;
+}
+
+static void error_if_dead(lua_State *L) {
+    if (lua_gettop(L) >= 3) {
+        int status = lua_toboolean(L, -3);
+        int type = lua_tointeger(L, -1);
+
+        if (unlikely(!status || type == RESP_ERR || type == RESP_BULK_ERR)) {
+            lua_pop(L, 1); // -type
+            lua_error(L); // -1 = err msg
+        }
+    }
+
+    ud_redis_client *client = lua_touserdata(L, 1);
+
+    if (unlikely(client->fd == -1)) {
+        luaL_error(L, "redis socket was closed");
+    }
+
+    int code = get_socket_error_code(client->fd);
+
+    if (unlikely(code != 0)) {
+        luaF_push_error_socket(L, client->fd, "connection failed", code);
+        lua_error(L);
+    }
 }

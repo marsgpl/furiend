@@ -13,3 +13,6 @@ RUN apk add cmake # yyjson
 RUN apk add tcl # redis test
 RUN apk add git openssh curl vim
 RUN apk add luarocks5.4 # cjson
+
+ENV ENV /root/.profile
+ENV IN_DOCKER true

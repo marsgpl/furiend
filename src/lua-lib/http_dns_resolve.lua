@@ -1,7 +1,8 @@
-local async = require "async"
-local wait = async.wait
 local http = require "http"
 local json = require "json"
+local error_kv = require "error_kv"
+local async = require "async"
+local wait = async.wait
 
 -- {"Status":0,"TC":false,"RD":true,"RA":true,"AD":false,"CD":false,"Question":[{"name":"api.telegram.org.","type":1}],"Answer":[{"name":"api.telegram.org.","type":1,"TTL":241,"data":"149.154.167.220"}]}
 return function(host)
@@ -18,7 +19,7 @@ return function(host)
     local ip4 = response.Answer[1].data
 
     if not ip4 then
-        error("no results found; host: " .. host .. "; body: " .. res.body)
+        error_kv("no results found", { host = host, body = res.body })
     end
 
     return ip4

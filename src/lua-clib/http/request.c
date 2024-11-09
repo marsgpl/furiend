@@ -64,7 +64,7 @@ int http_request_gc(lua_State *L) {
 }
 
 static int request_start(lua_State *L) {
-    ud_http_request *req = luaF_new_uduv_or_error(L,
+    ud_http_request *req = luaF_new_ud_or_error(L,
         sizeof(ud_http_request), 1);
 
     memset(req, 0, sizeof(ud_http_request));

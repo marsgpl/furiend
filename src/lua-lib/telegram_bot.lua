@@ -5,10 +5,10 @@ local json = require "json"
 
 -- https://core.telegram.org/bots/api
 
-local prototype = {}
-local mt = { __index = prototype }
+local proto = {}
+local mt = { __index = proto }
 
-function prototype:get_updates()
+function proto:get_updates()
     -- does not work if webhook was set
     return self:request("POST", "getUpdates", {
         timeout = 1,
@@ -16,17 +16,17 @@ function prototype:get_updates()
     })
 end
 
-function prototype:get_me()
+function proto:get_me()
     return self:request("GET", "getMe")
     -- {"ok":true,"result":{"id":000,"is_bot":true,"first_name":"xxx","username":"xxx","can_join_groups":false,"can_read_all_group_messages":false,"supports_inline_queries":false,"can_connect_to_business":false,"has_main_web_app":false}}
 end
 
-function prototype:get_webhook_info()
+function proto:get_webhook_info()
     return self:request("GET", "getWebhookInfo")
     -- {"ok":true,"result":{"url":"https://xxx","has_custom_certificate":false,"pending_update_count":0,"max_connections":40,"ip_address":"xx.xx.xx.xx","allowed_updates":["message","edited_message","message_reaction"]}}
 end
 
-function prototype:set_webhook(config)
+function proto:set_webhook(config)
     -- {"url":"https://xxx","secret_token":"xxx","allowed_updates":{"message","edited_message","message_reaction"}}
     assert(type(config) == "table")
     return self:request("POST", "setWebhook", {
@@ -39,7 +39,7 @@ function prototype:set_webhook(config)
     -- {"ok":false,"error_code":400,"description":"Bad Request: bad webhook: Failed to resolve host: No address associated with hostname"}
 end
 
-function prototype:request(method, path, body)
+function proto:request(method, path, body)
     assert(type(method) == "string")
     assert(type(path) == "string")
 

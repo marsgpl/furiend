@@ -22,8 +22,7 @@ else # not created
         --workdir /furiend \
         --network furiend \
         --hostname dc \
-        --ip 172.20.0.4 \
-        --env ENV=/root/.profile \
+        --ip 172.20.0.10 \
         --volume "$(pwd):/furiend/:rw" \
         --volume "$(pwd)/docker/.vimrc:/root/.vimrc:rw" \
         --volume "$(pwd)/docker/.profile:/root/.profile:rw" \
