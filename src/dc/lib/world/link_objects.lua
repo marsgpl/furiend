@@ -42,12 +42,12 @@ local function link_key(key, obj, class, objects)
         end
 
         obj[key] = rel_obj
-    elseif key_type == "int" then
-        local int, err = math.tointeger(value)
-        obj[key] = int
+    elseif key_type == "integer" then
+        local integer, err = math.tointeger(value)
+        obj[key] = integer
 
         if err then
-            error_kv("object.key: invalid int", {
+            error_kv("object.key: invalid integer", {
                 object = obj.id,
                 key = key,
                 value = value,
@@ -86,11 +86,11 @@ local function link_key(key, obj, class, objects)
                 value = value,
             })
         end
-    elseif key_type == "bool" then
+    elseif key_type == "boolean" then
         obj[key] = value == "true"
 
         if value ~= "true" and value ~= "false" then
-            error_kv("object.key: invalid bool", {
+            error_kv("object.key: invalid boolean", {
                 object = obj.id,
                 key = key,
                 value = value,

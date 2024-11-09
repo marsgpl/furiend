@@ -27,7 +27,7 @@ d.addEventListener('DOMContentLoaded', () => {
         ctx.classKeyTypes = r.class_key_types
 
         draw()
-        showEntity(location.hash.substring(1))
+        showEnt(location.hash.substring(1))
     }).catch(openError)
 
     $('#type').value = ctx.type
@@ -50,10 +50,9 @@ d.addEventListener('DOMContentLoaded', () => {
 
     w.addEventListener('mousemove', onMouseMove)
     w.addEventListener('mouseup', onMouseUp)
-    w.addEventListener('hashchange',
-        () => showEntity(location.hash.substring(1)))
+    w.addEventListener('hashchange', () => showEnt(location.hash.substring(1)))
 
-    w.onerror = (msg, url, line, col, error) =>
+    w.onerror = (msg, url, line, col) =>
         openError(`${msg}<br>${url}:${line}:${col}`)
 })
 
@@ -128,11 +127,12 @@ function delEntKey(nodeId, key) {
 }
 
 function draw() {
-    ctx.xy = {}
-    ctx.errors = {}
-    ctx.linesFrom = {}
-    ctx.linesTo = {}
-    ctx.linesIds = {}
+    ctx.xy = new Map
+    ctx.linesFrom = new Map
+    ctx.linesTo = new Map
+    ctx.linesIds = new Set
+    ctx.errors = new Map
+    ctx.missingKeys = new Map
 
     const canvas = $('#canvas')
     const plane = $('#plane')
@@ -147,6 +147,8 @@ function draw() {
 
     const { type, linesFrom, linesTo } = ctx
     const ents = ctx.ents[type]
+    const classesEnts = ctx.ents.class
+    const xy = ctx.xy
 
     let { x = 0, y = 0 } =
         JSON.parse(localStorage.getItem(type + ':plane:xy') || '{}')
@@ -160,16 +162,38 @@ function draw() {
         const gId = type + ':' + id
         const xyKey = 'xy:' + gId
         const text = id.substring(0, 32) + (id.length > 32 ? '...' : '')
+        let className = type
 
         const errors = type === 'class'
             ? checkClass(id)
             : checkObject(id)
 
-        const classes = [type]
+        if (errors.size) {
+            ctx.errors.set(gId, errors)
+            className = 'error'
+        }
 
-        if (Object.keys(errors).length > 0) {
-            ctx.errors[gId] = errors
-            classes.push('error')
+        if (type === 'object') {
+            const ent = ents[id]
+            const entClass = classesEnts[ent.class]
+            const keys = new Set
+
+            entClass && Object.keys(entClass).forEach(key => {
+                if (key === 'id') { return }
+
+                key = key.includes(':') ? key.split(':')[1] : key
+
+                if (!ent[key]) {
+                    keys.add(key)
+                }
+            })
+
+            if (keys.size) {
+                ctx.missingKeys.set(gId, keys)
+                if (className === type) {
+                    className = 'warning'
+                }
+            }
         }
 
         let { x, y } = JSON.parse(localStorage.getItem(xyKey) || '{}')
@@ -180,10 +204,10 @@ function draw() {
             localStorage.setItem(xyKey, JSON.stringify({ x, y }))
         }
 
-        ctx.xy[id] = { x, y }
+        xy.set(id, { x, y })
 
         nodesHTML += `<g id="${gId}" transform="translate(${x}, ${y})">
-            <circle r="8" class="${classes.join(' ')}"></circle>
+            <circle r="8" class="${className}"></circle>
             <text x="13" y="5">${text || 'undefined'}</text>
         </g>`
     })
@@ -199,7 +223,9 @@ function draw() {
     })
 
     plane.innerHTML = linesHTML + nodesHTML
-    ctx.linesIds = {} // free some mem
+
+    // not used anymore
+    delete ctx.linesIds
 
     $$('g > circle').forEach(circle => {
         circle.addEventListener('mousedown', startMoving)
@@ -212,11 +238,11 @@ function draw() {
     $$('line').forEach(line => {
         const [from, to] = line.id.split(':')
 
-        if (!linesFrom[from]) linesFrom[from] = []
-        if (!linesTo[to]) linesTo[to] = []
+        if (!linesFrom.has(from)) linesFrom.set(from, [])
+        if (!linesTo.has(to)) linesTo.set(to, [])
 
-        linesFrom[from].push(line)
-        linesTo[to].push(line)
+        linesFrom.get(from).push(line)
+        linesTo.get(to).push(line)
     })
 }
 
@@ -225,7 +251,7 @@ function makeClassLines(fromId) {
 
     const { xy, linesIds } = ctx
     const from = ctx.ents[ctx.type][fromId]
-    const { x: x1, y: y1 } = xy[fromId]
+    const { x: x1, y: y1 } = xy.get(fromId)
 
     Object.keys(from).forEach(key => {
         if (key === 'id') { return }
@@ -234,17 +260,17 @@ function makeClassLines(fromId) {
 
         if (prefix === 'rel' && name) {
             const toId = from[key]
-            if (!xy[toId]) { return }
+            if (!xy.has(toId)) { return }
 
             const lineId = fromId + ':' + toId
-            const { x: x2, y: y2 } = xy[toId]
+            const { x: x2, y: y2 } = xy.get(toId)
 
-            if (linesIds[lineId]) { return }
+            if (linesIds.has(lineId)) { return }
 
             html += line(lineId, x1, y1, x2, y2)
 
-            linesIds[lineId] = true
-            linesIds[toId + ':' + fromId] = true
+            linesIds.add(lineId)
+            linesIds.add(toId + ':' + fromId)
         }
     })
 
@@ -255,7 +281,7 @@ function makeObjLines(fromId) {
     let html = ''
 
     const { xy, linesIds, ents } = ctx
-    const { x: x1, y: y1 } = xy[fromId]
+    const { x: x1, y: y1 } = xy.get(fromId)
     const objs = ents[ctx.type]
     const from = objs[fromId]
     const fromClass = ents.class[from.class]
@@ -267,17 +293,17 @@ function makeObjLines(fromId) {
         if (!fromClass['rel:' + key]) { return }
 
         const toId = from[key]
-        if (!xy[toId]) { return }
+        if (!xy.has(toId)) { return }
 
         const lineId = fromId + ':' + toId
-        const { x: x2, y: y2 } = xy[toId]
+        const { x: x2, y: y2 } = xy.get(toId)
 
-        if (linesIds[lineId]) { return }
+        if (linesIds.has(lineId)) { return }
 
         html += line(lineId, x1, y1, x2, y2)
 
-        linesIds[lineId] = true
-        linesIds[toId + ':' + fromId] = true
+        linesIds.add(lineId)
+        linesIds.add(toId + ':' + fromId)
     })
 
     return html
@@ -302,8 +328,8 @@ function startMoving(e) {
         g, x, y,
         cX: e.clientX,
         cY: e.clientY,
-        linesFrom: ctx.linesFrom[entId],
-        linesTo: ctx.linesTo[entId],
+        linesFrom: ctx.linesFrom.get(entId) || [],
+        linesTo: ctx.linesTo.get(entId) || [],
     }
 }
 
@@ -316,12 +342,12 @@ function onMouseMove(e) {
 
         moving.g.setAttribute('transform', `translate(${x}, ${y})`)
 
-        moving.linesFrom?.forEach(line => {
+        moving.linesFrom.forEach(line => {
             line.setAttribute('x1', x)
             line.setAttribute('y1', y)
         })
 
-        moving.linesTo?.forEach(line => {
+        moving.linesTo.forEach(line => {
             line.setAttribute('x2', x)
             line.setAttribute('y2', y)
         })
@@ -336,13 +362,13 @@ function onMouseMove(e) {
 function onMouseUp(e) {
     const { moving, movingPlane } = ctx
 
-    const xxx = moving || movingPlane
-    const xyKey = moving ? 'xy:' + xxx.g.id : ctx.type + ':plane:xy'
+    const state = moving || movingPlane
+    const xyKey = moving ? 'xy:' + state.g.id : ctx.type + ':plane:xy'
 
-    if (!xxx) { return }
+    if (!state) { return }
 
-    const x = xxx.x + e.clientX - xxx.cX
-    const y = xxx.y + e.clientY - xxx.cY
+    const x = state.x + e.clientX - state.cX
+    const y = state.y + e.clientY - state.cY
 
     localStorage.setItem(xyKey, JSON.stringify({ x, y }))
 
@@ -372,16 +398,18 @@ function clickEntity(e) {
     location.hash = e.target.parentNode.id
 }
 
-function showEntity(nodeId) {
+function showEnt(nodeId) {
     if (!nodeId) {
         return closePanel()
     }
 
-    const ents = ctx.ents
     const [type, entId] = nodeId.split(':')
+    const ents = ctx.ents
     const ent = ents[type][entId]
+    const entClass = type === 'object' && ents.class[ent.class]
     const title = `${type}: ${entId}`
-    const errors = ctx.errors[nodeId] || {}
+    const errors = ctx.errors.get(nodeId) || new Map
+    const missingKeys = ctx.missingKeys.get(nodeId) || new Set
 
     if (!ent) {
         openError(`${type} not found by id: ${entId}`)
@@ -390,7 +418,7 @@ function showEntity(nodeId) {
 
     let body = ''
 
-    const div = key => `<div class="row ${errors[key] ? 'error' : ''}">`
+    const div = key => `<div class="row ${errors.has(key) ? 'error' : ''}">`
 
     body += `${div('id')}
         <div class="key">id</div>
@@ -424,7 +452,6 @@ function showEntity(nodeId) {
                 return
             }
         } else {
-            const entClass = ents.class[ent.class]
             const relObject = entClass?.['rel:' + key]
 
             if (relObject) {
@@ -440,17 +467,30 @@ function showEntity(nodeId) {
 
         body += `${div(key)}
             <div class="key" title="${key}">${key}</div>
-            <div class="value" title="${value}">${value}</div>
+            <div class="value" title="${value}">
+                ${ent.privacy ? '&#9900;'.repeat(10) : value}
+            </div>
             <button data-key="${key}" class="nobg edit">edit</button>
         </div>`
     })
 
-    if (Object.keys(errors).length > 0) {
+    if (errors.size) {
         body += `<div class="errors">
-            ${Object.entries(errors).map(([key, error]) => `
+            ${Array.from(errors.entries()).map(([key, error]) => `
                 key <b>${key}</b>: ${error}
             `).join('<br>')}
         </div>`
+    }
+
+    if (missingKeys.size) {
+        const rows = Array.from(missingKeys.keys()).map(key => {
+            const keyType = entClass[key] || entClass['rel:' + key]
+            return keyType === 'string'
+                ? `key <b>${key}</b>: missing (type: <b>${keyType}</b>)`
+                : `key <b>${key}</b>: missing (class: <a class="rel" href="#class:${keyType}">${keyType}</a>)`
+        })
+
+        body += `<div class="missing-keys">${rows.join('<br>')}</div>`
     }
 
     body += `
@@ -600,6 +640,7 @@ function openAdd() {
 
         row.querySelector('input').focus()
         row.querySelector('.x').addEventListener('click', () => {
+            $('#submit-error').innerText = ''
             row.parentNode.removeChild(row)
         })
     })
@@ -652,6 +693,8 @@ function openPopup(title, body) {
     $('#popup .popup-body').innerHTML = body
     $('#popup-shadow').style.display = 'block'
     $('#popup').style.display = 'block'
+
+    w.addEventListener('keydown', onEscClosePopup)
 }
 
 function openPanel(title, body) {
@@ -667,10 +710,18 @@ function closePopup() {
 
     $('#popup').style.display = 'none'
     $('#popup-shadow').style.display = 'none'
+
+    w.removeEventListener('keydown', onEscClosePopup)
 }
 
 function closePanel() {
     $('#panel').style.display = 'none'
+}
+
+function onEscClosePopup(event) {
+    if (event.key === 'Escape') {
+        closePopup()
+    }
 }
 
 function onSubmitStart(actionName) {
@@ -704,10 +755,10 @@ function onSubmitError(error) {
 }
 
 function checkClass(id) {
-    const errors = {}
+    const errors = new Map
 
     if (!id || typeof id !== 'string' || !id.match(/^[A-Za-z0-9]+$/)) {
-        errors.id = `invalid format; expected: ^[A-Za-z0-9]+$`
+        errors.set('id', `invalid format; expected: ^[A-Za-z0-9]+$`)
     }
 
     const ent = ctx.ents.class[id]
@@ -722,7 +773,7 @@ function checkClass(id) {
 
             if (!ctx.classKeyTypes[keyType]) {
                 const expected = Object.keys(ctx.classKeyTypes).join(', ')
-                errors[key] = `invalid type (expected: ${expected})`
+                errors.set(key, `invalid type (expected: <b>${expected}</b>)`)
             }
 
             return
@@ -731,7 +782,7 @@ function checkClass(id) {
         const [prefix, suffix] = key.split(':')
 
         if (!suffix) {
-            errors[key] = 'empty suffix'
+            errors.set(key, 'empty suffix')
             return
         }
 
@@ -740,37 +791,37 @@ function checkClass(id) {
             const relClass = ctx.ents.class[relClassId]
 
             if (!relClass) {
-                errors[key] = `class rel not found: <b>${relClassId}</b>`
+                errors.set(key, `class rel not found: <b>${relClassId}</b>`)
             }
 
             return
         }
 
-        errors[key] = `invalid prefix (expected: rel)`
+        errors.set(key, `invalid prefix (expected: <b>rel</b>)`)
     })
 
     return errors
 }
 
 function checkObject(id) {
-    const errors = {}
+    const errors = new Map
 
     if (!id || typeof id !== 'string' || !id.match(/^[a-z0-9_]+$/)) {
-        errors.id = `invalid format; expected: ^[a-z0-9_]+$`
+        errors.set('id', `invalid format; expected: ^[a-z0-9_]+$`)
     }
 
     const ent = ctx.ents.object[id]
     const objClass = ctx.ents.class[ent.class]
 
     if (!objClass) {
-        errors.class = `class not found: <b>${ent.class}</b>`
+        errors.set('class', `class not found: <b>${ent.class}</b>`)
     }
 
     Object.keys(ent).forEach(key => {
         if (key === 'id' || key === 'class') { return }
 
         if (!objClass) {
-            errors[key] = `unable to check key`
+            errors.set(key, `unable to check key`)
             return
         }
 
@@ -783,48 +834,48 @@ function checkObject(id) {
             const rel = ctx.ents.object[relId]
 
             if (!rel) {
-                errors[key] = `object rel not found: <b>${relId}</b>`
+                errors.set(key, `object rel not found: <b>${relId}</b>`)
             } else if (rel.class !== keyClassId) {
-                errors[key] = `rel class mismatch: <b>${rel.class}</b> (expected: ${keyClassId})`
+                errors.set(key, `rel class mismatch: <b>${rel.class}</b> (expected: <b>${keyClassId}</b>)`)
             }
 
             return
         }
 
         if (!type) {
-            errors[key] = `not defined in class`
+            errors.set(key, `not defined in class`)
             return
         }
 
         if (!value) {
-            errors[key] = `empty value`
+            errors.set(key, `empty value`)
             return
         }
 
-        if (type === 'int') {
+        if (type === 'integer') {
             if (String(parseInt(value, 10)) !== value) {
-                errors[key] = 'invalid int'
+                errors.set(key, 'invalid integer')
             }
         } else if (type === 'float') {
             if (!Number.isFinite(parseFloat(value))) {
-                errors[key] = 'invalid float'
+                errors.set(key, 'invalid float')
             }
         } else if (type === 'string') {
             // ok
         } else if (type === 'object') {
             if (typeof JSON.parse(value) !== 'object') {
-                errors[key] = 'invalid object'
+                errors.set(key, 'invalid object')
             }
         } else if (type === 'array') {
             if (!Array.isArray(JSON.parse(value))) {
-                errors[key] = 'invalid array'
+                errors.set(key, 'invalid array')
             }
-        } else if (type === 'bool') {
+        } else if (type === 'boolean') {
             if (value !== 'true' && value !== 'false') {
-                errors[key] = 'invalid bool'
+                errors.set(key, 'invalid boolean')
             }
         } else {
-            errors[key] = 'invalid type'
+            errors.set(key, 'invalid type')
         }
     })
 

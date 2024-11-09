@@ -1,8 +1,8 @@
 return {
-    int = true,
+    integer = true,
     float = true,
     string = true,
     object = true,
     array = true,
-    bool = true,
+    boolean = true,
 }

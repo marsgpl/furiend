@@ -15,6 +15,10 @@ body {
     color: #ddd;
 }
 
+a {
+    color: #fff;
+}
+
 html, input, select, button {
     font-family: sans-serif;
     font-size: 14px;
@@ -113,7 +117,8 @@ circle:active,
 
 circle.object { fill: #52b5d9; }
 circle.class { fill: #ef61b5; }
-circle.error { fill: red !important; }
+circle.warning { fill: yellow; }
+circle.error { fill: red; }
 
 text {
     cursor: pointer;
@@ -122,7 +127,7 @@ text {
 
 line {
     stroke-width: 1;
-    stroke: #888;
+    stroke: #555;
 }
 
 g g:hover { opacity: .8; }
@@ -188,10 +193,9 @@ g g:active { opacity: .6; }
 }
 
 #panel .row {
-    user-select: none;
     display: grid;
     column-gap: 5px;
-    grid-template-columns: 80px 1fr 48px;
+    grid-template-columns: 90px 1fr 48px;
 }
 
 #panel .row.error {
@@ -221,6 +225,13 @@ g g:active { opacity: .6; }
     margin: 25px 20px 0;
     padding: 20px;
     border: 1px solid red;
+    border-radius: 5px;
+}
+
+#panel .missing-keys {
+    margin: 25px 20px 0;
+    padding: 20px;
+    border: 1px solid yellow;
     border-radius: 5px;
 }
 
