@@ -212,7 +212,9 @@ function draw() {
         </g>`
     })
 
-    const makeLines = type == 'class' ? makeClassLines : makeObjLines
+    const makeLines = type == 'class'
+        ? makeClassLines
+        : makeObjLines
 
     Object.keys(ents).forEach(id => {
         const html = makeLines(id)
@@ -325,12 +327,27 @@ function startMoving(e) {
     let { x, y } = JSON.parse(localStorage.getItem(xyKey))
 
     ctx.moving = {
+        entId: entId,
         g, x, y,
         cX: e.clientX,
         cY: e.clientY,
         linesFrom: ctx.linesFrom.get(entId) || [],
         linesTo: ctx.linesTo.get(entId) || [],
     }
+}
+
+function setCirclePos(moving, x, y) {
+    moving.g.setAttribute('transform', `translate(${x}, ${y})`)
+
+    moving.linesFrom.forEach(line => {
+        line.setAttribute('x1', x)
+        line.setAttribute('y1', y)
+    })
+
+    moving.linesTo.forEach(line => {
+        line.setAttribute('x2', x)
+        line.setAttribute('y2', y)
+    })
 }
 
 function onMouseMove(e) {
@@ -340,17 +357,7 @@ function onMouseMove(e) {
         const x = moving.x + e.clientX - moving.cX
         const y = moving.y + e.clientY - moving.cY
 
-        moving.g.setAttribute('transform', `translate(${x}, ${y})`)
-
-        moving.linesFrom.forEach(line => {
-            line.setAttribute('x1', x)
-            line.setAttribute('y1', y)
-        })
-
-        moving.linesTo.forEach(line => {
-            line.setAttribute('x2', x)
-            line.setAttribute('y2', y)
-        })
+        setCirclePos(moving, x, y)
     } else if (movingPlane) {
         const x = movingPlane.x + e.clientX - movingPlane.cX
         const y = movingPlane.y + e.clientY - movingPlane.cY
@@ -363,12 +370,36 @@ function onMouseUp(e) {
     const { moving, movingPlane } = ctx
 
     const state = moving || movingPlane
-    const xyKey = moving ? 'xy:' + state.g.id : ctx.type + ':plane:xy'
+    const xyKey = moving
+        ? 'xy:' + state.g.id
+        : ctx.type + ':plane:xy'
 
     if (!state) { return }
 
-    const x = state.x + e.clientX - state.cX
-    const y = state.y + e.clientY - state.cY
+    let x = state.x + e.clientX - state.cX
+    let y = state.y + e.clientY - state.cY
+
+    if (moving) {
+        const xy = ctx.xy
+        const entId = moving.entId
+
+        for (const [id, { x: x2, y: y2 }] of xy) {
+            if (id === entId) continue
+
+            const dx = Math.abs(x2 - x)
+            const dy = Math.abs(y2 - y)
+
+            if (dx <= 16 && dy <= 16) {
+                x = x2
+                y = y > y2 ? y2 + 20 : y2 - 20
+
+                setCirclePos(moving, x, y)
+                break
+            }
+        }
+
+        xy.set(entId, { x, y })
+    }
 
     localStorage.setItem(xyKey, JSON.stringify({ x, y }))
 
@@ -515,7 +546,7 @@ function confirmDelEnt(nodeId) {
     const [type, id] = nodeId.split(':')
 
     const title = `delete ${type}: ${id}`
-    const msg = `${type} "${id}" will be permanently deleted<br>rels will be broken`
+    const msg = `${type} <b>${id}</b> will be permanently deleted<br>rels will be broken`
 
     openConfirm(title, msg, () => delEnt(nodeId))
 }
@@ -588,7 +619,7 @@ function openEditKey(nodeId, key) {
 function confirmDelEntKey(nodeId, key) {
     const [type, id] = nodeId.split(':')
     const title = `delete key: ${key}`
-    const msg = `key "${key}" will be permanently deleted from the ${type} "${id}"`
+    const msg = `key <b>${key}</b> will be permanently deleted from the ${type} <b>${id}</b>`
 
     openConfirm(title, msg,
         () => delEntKey(nodeId, key),

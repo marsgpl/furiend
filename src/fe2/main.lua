@@ -13,7 +13,7 @@ local waitall = require "waitall"
 local tgbot = require "telegram_bot"
 local tgwh = require "telegram_bot_webhook"
 local is_dc_cmd = require "lib.is_dc_cmd"
-local is_tg_event = require "lib.is_tg_event"
+local is_tg_bot_event = require "lib.is_tg_bot_event"
 
 local config = require "config"
 local in_docker = os.getenv("IN_DOCKER")
@@ -87,17 +87,17 @@ loop(function()
     end
 
     wh_conf.on_data = function(req, event)
-        if not is_tg_event(event) then
+        if not is_tg_bot_event(event) then
             error("tgwh received bad event: " .. json.stringify(event))
         end
 
-        log("tg event", event.update_id)
-        dc("tg_event", { event = event })
+        log("tg bot event", event.update_id)
+        dc("tg_bot_event", { event = event })
     end
 
     wh_conf.on_error = function(req, err)
-        log("tg error", err, req)
-        dc("tg_error", { error = err, req = req })
+        log("tg bot error", err, req)
+        dc("tg_bot_error", { error = err, req = req })
     end
 
     wh = tgwh(wh_conf)
@@ -113,7 +113,7 @@ loop(function()
     log("id", me.id)
     log("username", me.username)
     log("display name", me.first_name)
-    dc("tg_me", { me = me })
+    dc("tg_bot_me", { me = me })
 
     -- set webhook
 
@@ -122,7 +122,7 @@ loop(function()
 
     local wh_info = tg:get_webhook_info()
     log("tgwh pending updates", wh_info.pending_update_count)
-    dc("tg_wh_info", { info = wh_info })
+    dc("tg_bot_wh_info", { info = wh_info })
 
     -- wait for graceful shutdown
 
