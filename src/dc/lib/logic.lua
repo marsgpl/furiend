@@ -8,16 +8,6 @@ local unwrap = require "unwrap"
 return function(dc, event)
     log("event", event)
 
-    -- event is of type class:EntourageEvent
-    -- classify event further
-
-    -- event is of type class:TelegramBotEvent:
-        -- event.type == "tg_event"
-        -- event.from == "fe2"
-
-    -- could not classify event:
-        -- trigger "unknown event" logic
-
     if event.from == "fe2" and event.type == "tg_bot_event" then
         local cmd_id = next_id(dc.cmd_ids, event.from)
         local chat_id = unwrap(event, "payload.event.*.chat.id")

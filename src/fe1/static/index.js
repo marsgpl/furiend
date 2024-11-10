@@ -9,22 +9,15 @@ const ctx = {
 
 d.addEventListener('DOMContentLoaded', () => {
     fetch('/entities').then(r => r.json()).then(r => {
-        if (r?.error) throw Error(r?.error)
-
-        ['objects', 'classes'].forEach(type => {
-            const ents = r[type]
-
-            Object.keys(ents).forEach(id => {
-                ents[id].id = id
-            })
-        })
+        if (r?.error) throw Error(r.error)
 
         ctx.ents = {
-            object: r.objects,
-            class: r.classes,
+            object: setIds(r.objects),
+            class: setIds(r.classes),
         }
 
         ctx.classKeyTypes = r.class_key_types
+            .reduce((map, type) => map.set(type, true), new Map)
 
         draw()
         showEnt(location.hash.substring(1))
@@ -56,6 +49,11 @@ d.addEventListener('DOMContentLoaded', () => {
         openError(`${msg}<br>${url}:${line}:${col}`)
 })
 
+function setIds(ents) {
+    Object.entries(ents).forEach(([id, ent]) => ent.id = id)
+    return ents
+}
+
 function addEnt(type, entity) {
     onSubmitStart('adding')
 
@@ -63,7 +61,7 @@ function addEnt(type, entity) {
         method: 'PUT',
         body: JSON.stringify(entity)
     }).then(r => r.json()).then(r => {
-        if (r?.error) throw Error(r?.error)
+        if (r?.error) throw Error(r.error)
         onSubmitSuccess()
         const entity = r[type]
         ctx.ents[type][entity.id] = entity
@@ -82,7 +80,7 @@ function delEnt(nodeId) {
         method: 'DELETE',
         body: JSON.stringify({ id }),
     }).then(r => r.json()).then(r => {
-        if (r?.error) throw Error(r?.error)
+        if (r?.error) throw Error(r.error)
         onSubmitSuccess()
         delete ctx.ents[type][id]
         draw()
@@ -99,7 +97,7 @@ function setEntKey(nodeId, key, value, actionName) {
         method: 'PUT',
         body: JSON.stringify({ id, key, value })
     }).then(r => r.json()).then(r => {
-        if (r?.error) throw Error(r?.error)
+        if (r?.error) throw Error(r.error)
         onSubmitSuccess()
         ctx.ents[type][id][key] = value
         draw()
@@ -117,7 +115,7 @@ function delEntKey(nodeId, key) {
         method: 'DELETE',
         body: JSON.stringify({ id, key }),
     }).then(r => r.json()).then(r => {
-        if (r?.error) throw Error(r?.error)
+        if (r?.error) throw Error(r.error)
         onSubmitSuccess()
         delete ctx.ents[type][id][key]
         draw()
@@ -130,9 +128,10 @@ function draw() {
     ctx.xy = new Map
     ctx.linesFrom = new Map
     ctx.linesTo = new Map
-    ctx.linesIds = new Set
     ctx.errors = new Map
     ctx.missingKeys = new Map
+
+    ctx.linesIds = new Set
 
     const canvas = $('#canvas')
     const plane = $('#plane')
@@ -238,13 +237,16 @@ function draw() {
     })
 
     $$('line').forEach(line => {
-        const [from, to] = line.id.split(':')
+        const [fromId, toId] = line.id.split(':')
 
-        if (!linesFrom.has(from)) linesFrom.set(from, [])
-        if (!linesTo.has(to)) linesTo.set(to, [])
+        const from = linesFrom.get(fromId) || []
+        const to = linesTo.get(toId) || []
 
-        linesFrom.get(from).push(line)
-        linesTo.get(to).push(line)
+        from.push(line)
+        to.push(line)
+
+        from.length === 1 && linesFrom.set(fromId, from)
+        to.length === 1 && linesTo.set(toId, to)
     })
 }
 
@@ -312,39 +314,78 @@ function makeObjLines(fromId) {
 }
 
 function line(id, x1, y1, x2, y2) {
-    return `<line id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">
-    </line>`
+    return `<line
+        id="${id}"
+        x1="${x1}" y1="${y1}"
+        x2="${x2}" y2="${y2}"
+    ></line>`
+}
+
+function onPlaneDragStart(e) {
+    if (e.target.id != 'canvas') return
+
+    e.stopPropagation()
+
+    const xyKey = ctx.type + ':plane:xy'
+    const { x = 0, y = 0 } = JSON.parse(localStorage.getItem(xyKey) || '{}')
+
+    ctx.movingPlane = {
+        plane: $('#plane'),
+        x, y,
+        cX: e.clientX,
+        cY: e.clientY,
+    }
 }
 
 function startMoving(e) {
     e.stopPropagation()
 
-    const g = e.target.parentNode
-    const gId = g.id
-    const entId = gId.split(':')[1]
-    const xyKey = 'xy:' + gId
+    const { type, xy, linesFrom, linesTo } = ctx
+    const targets = []
 
-    let { x, y } = JSON.parse(localStorage.getItem(xyKey))
+    const g = e.target.parentNode
+    const entId = g.id.split(':')[1]
+    const { x, y } = xy.get(entId)
+
+    targets.push({
+        entId,
+        g, x, y,
+        linesFrom: linesFrom.get(entId),
+        linesTo: linesTo.get(entId),
+    })
+
+    for (const [sibId, { x: sibX, y: sibY }] of xy) {
+        if (sibId === entId) continue
+
+        if (sibX === x && sibY > y && sibY - y <= 200) {
+            const g = d.getElementById(`${type}:${sibId}`)
+            const { x, y } = xy.get(sibId)
+
+            targets.push({
+                entId: sibId,
+                g, x, y,
+                linesFrom: linesFrom.get(sibId),
+                linesTo: linesTo.get(sibId),
+            })
+        }
+    }
 
     ctx.moving = {
-        entId: entId,
-        g, x, y,
         cX: e.clientX,
         cY: e.clientY,
-        linesFrom: ctx.linesFrom.get(entId) || [],
-        linesTo: ctx.linesTo.get(entId) || [],
+        targets,
     }
 }
 
-function setCirclePos(moving, x, y) {
-    moving.g.setAttribute('transform', `translate(${x}, ${y})`)
+function moveTarget(g, x, y, linesFrom, linesTo) {
+    g.setAttribute('transform', `translate(${x}, ${y})`)
 
-    moving.linesFrom.forEach(line => {
+    linesFrom?.forEach(line => {
         line.setAttribute('x1', x)
         line.setAttribute('y1', y)
     })
 
-    moving.linesTo.forEach(line => {
+    linesTo?.forEach(line => {
         line.setAttribute('x2', x)
         line.setAttribute('y2', y)
     })
@@ -353,75 +394,76 @@ function setCirclePos(moving, x, y) {
 function onMouseMove(e) {
     const { moving, movingPlane } = ctx
 
-    if (moving) {
-        const x = moving.x + e.clientX - moving.cX
-        const y = moving.y + e.clientY - moving.cY
+    if (movingPlane) {
+        let { plane, x, y, cX, cY } = movingPlane
 
-        setCirclePos(moving, x, y)
-    } else if (movingPlane) {
-        const x = movingPlane.x + e.clientX - movingPlane.cX
-        const y = movingPlane.y + e.clientY - movingPlane.cY
+        x += e.clientX - cX
+        y += e.clientY - cY
 
-        movingPlane.plane.setAttribute('transform', `translate(${x}, ${y})`)
+        plane.setAttribute('transform', `translate(${x}, ${y})`)
+        return
     }
+
+    if (!moving) return
+
+    const { targets, cX, cY } = moving
+
+    targets.forEach(({ g, x, y, linesFrom, linesTo }) => {
+        x += e.clientX - cX
+        y += e.clientY - cY
+
+        moveTarget(g, x, y, linesFrom, linesTo)
+    })
 }
 
 function onMouseUp(e) {
+    onMouseMove(e)
+
     const { moving, movingPlane } = ctx
+    const { type, xy } = ctx
 
-    const state = moving || movingPlane
-    const xyKey = moving
-        ? 'xy:' + state.g.id
-        : ctx.type + ':plane:xy'
+    if (movingPlane) {
+        let { x, y, cX, cY } = movingPlane
 
-    if (!state) { return }
+        x += e.clientX - cX
+        y += e.clientY - cY
 
-    let x = state.x + e.clientX - state.cX
-    let y = state.y + e.clientY - state.cY
+        localStorage.setItem(type + ':plane:xy', JSON.stringify({ x, y }))
 
-    if (moving) {
-        const xy = ctx.xy
-        const entId = moving.entId
+        ctx.movingPlane = null
+        return
+    }
 
-        for (const [id, { x: x2, y: y2 }] of xy) {
-            if (id === entId) continue
+    if (!moving) return
 
-            const dx = Math.abs(x2 - x)
-            const dy = Math.abs(y2 - y)
+    const { targets, cX, cY } = moving
+    const isSingle = targets.length === 1
 
-            if (dx <= 16 && dy <= 16) {
-                x = x2
-                y = y > y2 ? y2 + 20 : y2 - 20
+    targets.forEach(({ entId, g, x, y, linesFrom, linesTo }) => {
+        x += e.clientX - cX
+        y += e.clientY - cY
 
-                setCirclePos(moving, x, y)
-                break
+        if (isSingle) {
+            for (const [sibId, { x: sibX, y: sibY }] of xy) {
+                if (sibId === entId) continue
+
+                const dx = Math.abs(x - sibX)
+                const dy = y - sibY
+
+                if (dx <= 20 && dy > 0 && dy <= 20) {
+                    x = sibX
+                    y = y > sibY ? sibY + 20 : sibY - 20
+
+                    moveTarget(g, x, y, linesFrom, linesTo)
+                }
             }
         }
 
         xy.set(entId, { x, y })
-    }
-
-    localStorage.setItem(xyKey, JSON.stringify({ x, y }))
+        localStorage.setItem(`xy:${type}:${entId}`, JSON.stringify({ x, y }))
+    })
 
     ctx.moving = null
-    ctx.movingPlane = null
-}
-
-function onPlaneDragStart(e) {
-    if (e.target.id != 'canvas') { return }
-
-    e.stopPropagation()
-
-    const xyKey = ctx.type + ':plane:xy'
-
-    let { x = 0, y = 0 } = JSON.parse(localStorage.getItem(xyKey) || '{}')
-
-    ctx.movingPlane = {
-        plane: $('#plane'),
-        x, y,
-        cX: e.clientX,
-        cY: e.clientY,
-    }
 }
 
 function clickEntity(e) {
@@ -499,7 +541,9 @@ function showEnt(nodeId) {
         body += `${div(key)}
             <div class="key" title="${key}">${key}</div>
             <div class="value" title="${value}">
-                ${ent.privacy ? '&#9900;'.repeat(10) : value}
+                ${ent.privacy === 'access_top_secret'
+                    ? '&#9900;'.repeat(10)
+                    : value}
             </div>
             <button data-key="${key}" class="nobg edit">edit</button>
         </div>`
@@ -802,8 +846,8 @@ function checkClass(id) {
         if (!key.includes(':')) {
             const keyType = ent[key]
 
-            if (!ctx.classKeyTypes[keyType]) {
-                const expected = Object.keys(ctx.classKeyTypes).join(', ')
+            if (!ctx.classKeyTypes.has(keyType)) {
+                const expected = Array.from(ctx.classKeyTypes.keys()).join(', ')
                 errors.set(key, `invalid type (expected: <b>${expected}</b>)`)
             }
 

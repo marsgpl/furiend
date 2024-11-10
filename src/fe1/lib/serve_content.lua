@@ -2,6 +2,7 @@ local fs = require "fs"
 local redis = require "redis"
 local trim = require "trim"
 local error_kv = require "error_kv"
+local get_keys = require "get_keys"
 local json_response = require "lib.json_response"
 local load_entities = require "world.load_entities"
 local check_class_id = require "world.check_class_id"
@@ -34,7 +35,7 @@ local function cmd_get_entities(req, res)
     json_response(res, {
         classes = classes,
         objects = objects,
-        class_key_types = class_key_types,
+        class_key_types = get_keys(class_key_types),
     })
 end
 
