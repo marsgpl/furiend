@@ -1,6 +1,6 @@
 # Füriend Entourage #2 - fe2
 
-## test
+## bind
 
 ```sh
 . provision/.env

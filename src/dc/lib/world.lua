@@ -1,5 +1,6 @@
 local promise = require "promise"
 local waitall = require "waitall"
+local key_prefix = require "lib.world.key_prefix"
 local load_entities = require "lib.world.load_entities"
 local link_classes = require "lib.world.link_classes"
 local link_objects = require "lib.world.link_objects"
@@ -26,11 +27,11 @@ function proto:stat()
 end
 
 function proto:load_classes()
-    self.classes = load_entities(self.rc, "class:")
+    self.classes = load_entities(self.rc, key_prefix.class)
 end
 
 function proto:load_objects()
-    self.objects = load_entities(self.rc, "object:")
+    self.objects = load_entities(self.rc, key_prefix.object)
 end
 
 return function(props)

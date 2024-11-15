@@ -1,71 +1,47 @@
+local json = require "json"
 local error_kv = require "error_kv"
-local get_keys = require "get_keys"
-local class_key_types = require "lib.world.class_key_types"
-local check_class_id = require "lib.world.check_class_id"
+local to_set = require "to_set"
+local check_id = require "lib.world.check_id"
+local check_key_name = require "lib.world.check_key_name"
+local types = require "lib.world.types"
+
+local types_set = to_set(types)
 
 local function link_key(key, class, classes)
-    local sep_pos = key:find(":", 1, true)
+    check_key_name(key)
 
-    if not sep_pos then -- simple type
-        local key_type = class[key]
+    local schema = json.parse(class[key])
+    assert(type(schema) == "table", "schema is not a table")
 
-        if not class_key_types[key_type] then
-            error_kv("invalid class.key type", {
-                class = class.id,
-                key = key,
-                type = key_type,
-                expected = get_keys(class_key_types),
-            })
-        end
+    local schema_type = schema.type
+    assert(types_set[schema_type], "schema type not found")
 
-        return
+    if schema_type == "rel" or schema_type == "rels" then
+        local rel_class = classes[schema.class]
+        assert(rel_class, "rel class not found")
+        schema.class = rel_class
     end
 
-    local prefix = key:sub(1, sep_pos - 1)
-    local suffix = key:sub(sep_pos + 1)
-
-    if #suffix == 0 then
-        error_kv("empty class.key suffix", {
-            class = class.id,
-            key = key,
-        })
-    end
-
-    if prefix == "rel" then -- class relation
-        local rel_class_id = class[key]
-        local rel_class = classes[rel_class_id]
-
-        if not rel_class then
-            error_kv("class rel not found", {
-                class = class.id,
-                key = key,
-                id = rel_class_id,
-            })
-        end
-
-        class[suffix] = rel_class
-        class[key] = nil
-
-        return
-    end
-
-    error_kv("invalid class.key prefix", {
-        class = class.id,
-        key = key,
-        prefix = prefix,
-        expected = { "rel" },
-    })
+    class[key] = schema
 end
 
 return function(classes)
     for id, class in pairs(classes) do
+        check_id(id, "class")
+
         class.id = id
 
-        check_class_id(id)
-
-        for _, key in ipairs(get_keys(class)) do
+        for key in pairs(class) do
             if key ~= "id" then
-                link_key(key, class, classes)
+                local ok, err = pcall(link_key, key, class, classes)
+
+                if not ok then
+                    error_kv("class key link failed: " .. err, {
+                        class_id = id,
+                        key = key,
+                        value = class[key],
+                    })
+                end
             end
         end
     end

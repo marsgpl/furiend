@@ -6,7 +6,7 @@ return function(value)
     local next_idx = 1
 
     for idx in pairs(value) do
-        if math.type(value) ~= "integer" or idx ~= next_idx then
+        if math.type(idx) ~= "integer" or idx ~= next_idx then
             return false
         end
 

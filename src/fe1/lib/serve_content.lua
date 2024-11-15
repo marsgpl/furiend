@@ -1,159 +1,183 @@
 local fs = require "fs"
 local redis = require "redis"
-local trim = require "trim"
-local error_kv = require "error_kv"
-local get_keys = require "get_keys"
-local json_response = require "lib.json_response"
-local load_entities = require "world.load_entities"
-local check_class_id = require "world.check_class_id"
-local check_object_id = require "world.check_object_id"
-local class_key_types = require "world.class_key_types"
 local async = require "async"
 local wait = async.wait
+local error_kv = require "error_kv"
+local json_response = require "lib.json_response"
+local load_entities = require "world.load_entities"
+local types = require "world.types"
+local key_prefix = require "world.key_prefix"
 
-local function check_kv(key, value)
-    local trimmed_key = trim(key)
-    local trimmed_value = trim(value)
+local function cmd_delete_key(req, res, mode)
+    local session = req.session
+    local rc, dc, body = session.rc, session.dc, session.parsed_body
+    local id, key = tostring(body.id), tostring(body.key)
 
-    if #trimmed_key == 0 then
-        error("empty key")
-    elseif trimmed_key ~= key then
-        error("non-trimmed key: " .. key)
-    elseif #trimmed_value == 0 then
-        error_kv("empty value", { key = key })
-    elseif trimmed_value ~= value then
-        error_kv("non-trimmed value", { key = key, value = value })
-    end
-end
+    wait(rc:query(redis:pack {
+        "hdel",
+        key_prefix[mode] .. id,
+        key,
+    }))
 
-local function cmd_get_entities(req, res)
-    local rc = req.session.rc
-
-    local classes = load_entities(rc, "class:")
-    local objects = load_entities(rc, "object:")
-
-    json_response(res, {
-        classes = classes,
-        objects = objects,
-        class_key_types = get_keys(class_key_types),
+    dc("delete_key", {
+        mode = mode,
+        id = id,
+        key = key,
     })
+
+    json_response(res, {})
 end
 
-local function cmd_create_entity(req, res, ent_type)
+local function cmd_delete_entity(req, res, mode)
+    local session = req.session
+    local rc, dc, body = session.rc, session.dc, session.parsed_body
+    local id = tostring(body.id)
+
+    wait(rc:query(redis:pack {
+        "del",
+        key_prefix[mode] .. id,
+    }))
+
+    dc("delete_entity", {
+        mode = mode,
+        id = id,
+    })
+
+    json_response(res, {})
+end
+
+local function cmd_create_entity(req, res, mode)
     local session = req.session
     local rc, dc, entity = session.rc, session.dc, session.parsed_body
-    local id = entity.id
-
-    if ent_type == "class" then
-        check_class_id(id)
-    else
-        check_object_id(id)
-    end
+    local id = tostring(entity.id)
 
     local query = {
         "hset",
-        ent_type .. ":" .. id,
+        key_prefix[mode] .. id,
     }
 
     for key, value in pairs(entity) do
-        check_kv(key, value)
-
         if key ~= "id" then
             table.insert(query, key)
-            table.insert(query, value)
+            table.insert(query, tostring(value))
         end
     end
 
     wait(rc:query(redis:pack(query)))
 
-    dc(ent_type .. "_new", { [ent_type] = entity })
-
-    json_response(res, {
-        [ent_type] = entity,
+    dc("create_entity", {
+        mode = mode,
+        entity = entity,
     })
-end
-
-local function cmd_delete_entity(req, res, ent_type)
-    local session = req.session
-    local rc, dc, body = session.rc, session.dc, session.parsed_body
-    local id = body.id
-
-    wait(rc:query(redis:pack {
-        "del",
-        ent_type .. ":" .. id,
-    }))
-
-    dc(ent_type .. "_del", { id = id })
 
     json_response(res, {})
 end
 
-local function cmd_set_key(req, res, ent_type)
+local function cmd_rename_entity(req, res, mode)
     local session = req.session
-    local rc, dc, entity = session.rc, session.dc, session.parsed_body
-    local id, key, value = entity.id, entity.key, entity.value
+    local rc, dc, body = session.rc, session.dc, session.parsed_body
+    local old_id, new_id = tostring(body.id), tostring(body.value)
 
-    if ent_type == "class" then
-        check_class_id(id)
-    else
-        check_object_id(id)
+    wait(rc:query(redis:pack {
+        "rename",
+        key_prefix[mode] .. old_id,
+        key_prefix[mode] .. new_id,
+    }))
+
+    dc("rename_entity", {
+        mode = mode,
+        old_id = old_id,
+        new_id = new_id,
+    })
+
+    json_response(res, {})
+end
+
+local function cmd_set_key(req, res, mode)
+    local session = req.session
+    local rc, dc, body = session.rc, session.dc, session.parsed_body
+    local id, key, new_key, value =
+        tostring(body.id),
+        tostring(body.key),
+        tostring(body.new_key),
+        tostring(body.value)
+
+    if key == "id" then
+        if key ~= new_key then
+            error("id key cannot be renamed")
+        end
+
+        return cmd_rename_entity(req, res, mode)
     end
-
-    check_kv(key, value)
 
     wait(rc:query(redis:pack {
         "hset",
-        ent_type .. ":" .. id,
-        key,
+        key_prefix[mode] .. id,
+        new_key,
         value,
     }))
 
-    dc(ent_type .. "_key_set", {
+    dc("set_key", {
+        mode = mode,
         id = id,
-        key = key,
+        key = new_key,
         value = value,
     })
 
+    if key ~= new_key then
+        wait(rc:query(redis:pack {
+            "hdel",
+            key_prefix[mode] .. id,
+            key,
+        }))
+
+        dc("delete_key", {
+            reason = "rename",
+            mode = mode,
+            id = id,
+            key = key,
+        })
+    end
+
     json_response(res, {})
 end
 
-local function cmd_delete_key(req, res, ent_type)
-    local session = req.session
-    local rc, dc, entity = session.rc, session.dc, session.parsed_body
-    local id, key = entity.id, entity.key
+local function cmd_get_entities(req, res)
+    local rc = req.session.rc
 
-    wait(rc:query(redis:pack {
-        "hdel",
-        ent_type .. ":" .. id,
-        key,
-    }))
+    local classes = load_entities(rc, key_prefix.class)
+    local objects = load_entities(rc, key_prefix.object)
 
-    dc(ent_type .. "_key_del", {
-        id = id,
-        key = key,
+    json_response(res, {
+        classes = classes,
+        objects = objects,
+        types = types,
     })
-
-    json_response(res, {})
 end
 
-local function serve_html(req, res)
+local function serve_html(req, res, path)
     res:push_header("Content-Type", "text/html")
-    res:set_body(fs.readfile(req.session.static .. "/index.html"))
+    res:set_body(fs.readfile(req.session.static .. path))
 end
 
-local function serve_logo(req, res)
+local function serve_svg(req, res, path)
     res:push_header("Content-Type", "image/svg+xml")
-    res:set_body(fs.readfile(req.session.static .. "/logo.svg"))
+    res:set_body(fs.readfile(req.session.static .. path))
 end
 
-local function serve_css(req, res)
+local function serve_css(req, res, path)
     res:push_header("Content-Type", "text/css")
-    res:set_body(fs.readfile(req.session.static .. "/index.css"))
+    res:set_body(fs.readfile(req.session.static .. path))
 end
 
-local function serve_js(req, res)
+local function serve_js(req, res, path)
     res:push_header("Content-Type", "text/javascript")
-    res:set_body(fs.readfile(req.session.static .. "/index.js"))
+    res:set_body(fs.readfile(req.session.static .. path))
+end
+
+local function serve_woff2(req, res, path)
+    res:push_header("Content-Type", "font/woff2")
+    res:set_body(fs.readfile(req.session.static .. path))
 end
 
 return function(req, res)
@@ -161,13 +185,13 @@ return function(req, res)
 
     if method == "GET" then
         if path == "/" then
-            return serve_html(req, res)
-        elseif path == "/logo.svg" then
-            return serve_logo(req, res)
-        elseif path == "/index.css" then
-            return serve_css(req, res)
-        elseif path == "/index.js" then
-            return serve_js(req, res)
+            return serve_html(req, res, "/index.html")
+        elseif path:match("^/[%w_]+%.svg$") then
+            return serve_svg(req, res, path)
+        elseif path:match("^/[%w_]+%.css$") then
+            return serve_css(req, res, path)
+        elseif path:match("^/[%w_]+%.js$") then
+            return serve_js(req, res, path)
         elseif path == "/entities" then
             return cmd_get_entities(req, res)
         end

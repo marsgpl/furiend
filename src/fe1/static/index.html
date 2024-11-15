@@ -5,32 +5,35 @@
         <link rel="icon" href="/logo.svg" />
         <link rel="stylesheet" href="/index.css" />
         <script src="/index.js"></script>
+        <script src="/popup.js"></script>
+        <script src="/canvas.js"></script>
     </head>
     <body>
-        <svg xmlns="http://www.w3.org/2000/svg" id="canvas">
+        <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
             <g id="plane"></g>
         </svg>
 
-        <div id="canvas-actions">
-            <select id="type">
+        <div id="action-bar">
+            <select id="mode">
                 <option value="class">classes</option>
                 <option value="object">objects</option>
             </select>
+            <button id="add-ent">add</button>
+        </div>
 
-            <button id="add">add</button>
+        <div id="stats"></div>
+
+        <div id="panel">
+            <div class="popup-title dots"></div>
+            <button class="popup-close clear"></button>
+            <div class="popup-body"></div>
         </div>
 
         <div id="popup-shadow"></div>
 
-        <div class="popup" id="panel">
-            <div class="popup-title"></div>
-            <button class="popup-close nobg"></button>
-            <div class="popup-body"></div>
-        </div>
-
-        <div class="popup" id="popup">
-            <div class="popup-title"></div>
-            <button class="popup-close nobg"></button>
+        <div id="popup">
+            <div class="popup-title dots"></div>
+            <button class="popup-close clear"></button>
             <div class="popup-body"></div>
         </div>
     </body>

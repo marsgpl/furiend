@@ -1,11 +1,11 @@
 local json = require "json"
 
-return function(error_message, key_value_data)
+return function(error_msg, map)
     local chunks = {
-        tostring(error_message),
+        tostring(error_msg),
     }
 
-    for key, value in pairs(key_value_data) do
+    for key, value in pairs(map) do
         if type(value) == "table" then
             value = json.stringify(value)
         end

@@ -36,10 +36,10 @@ loop(function()
     end
 
     local on_push = function(push)
-        assert(is_dc_cmd(push), "bad push")
+        assert(is_dc_cmd(push, config), "bad push")
         log("cmd", push.cmd_id, push.cmd)
 
-        local result = tg:request("POST", push.cmd, push.body)
+        local result = tg:request("POST", push.cmd, push.payload)
 
         log("cmd ok", push.cmd_id)
         dc("cmd_ok",  { cmd_id = push.cmd_id, result = result })

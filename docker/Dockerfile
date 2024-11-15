@@ -5,7 +5,7 @@ WORKDIR /furiend
 RUN apk update
 RUN apk upgrade
 RUN apk add gcc make
-RUN apk add valgrind gdb perf tcpflow
+RUN apk add valgrind gdb perf tcpflow strace
 RUN apk add openssl openssl-libs-static openssl-dev
 RUN apk add git openssh curl vim
 RUN apk add musl-dev # busybox libc headers

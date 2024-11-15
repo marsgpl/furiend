@@ -1,7 +1,7 @@
-return function(t)
+return function(object)
     local keys = {}
 
-    for key in pairs(t) do
+    for key in pairs(object) do
         table.insert(keys, key)
     end
 

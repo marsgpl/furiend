@@ -4,6 +4,7 @@ local json = require "json"
 local next_id = require "lib.next_id"
 local log = require "log"
 local unwrap = require "unwrap"
+local error_kv = require "error_kv"
 
 return function(dc, event)
     log("event", event)
@@ -13,18 +14,18 @@ return function(dc, event)
         local chat_id = unwrap(event, "payload.event.*.chat.id")
 
         if not chat_id then
-            wait(dc.rc:publish(event.from, json.stringify {
-                from = dc.config.id,
-                type = "cmd",
-                cmd = "sendChatAction",
-                cmd_id = cmd_id,
-                body = {
-                    chat_id = chat_id,
-                    action = "typing",
-                },
-            }))
-        else
-            log("unable to find chat id in tg event")
+            error_kv("unable to find chat id in tg event")
         end
+
+        wait(dc.rc:publish(event.from, json.stringify {
+            type = "cmd",
+            from = dc.config.id,
+            cmd = "sendChatAction",
+            cmd_id = cmd_id,
+            payload = {
+                chat_id = chat_id,
+                action = "typing",
+            },
+        }))
     end
 end

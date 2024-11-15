@@ -1,10 +1,9 @@
-return function(push)
+return function(push, config)
     local type = type
-    local body = push.body
 
-    return push.from == "dc"
+    return type(push) == "table"
         and push.type == "cmd"
+        and push.from == config.dc
         and type(push.cmd) == "string"
         and type(push.cmd_id) == "number"
-        and (not body or type(body) == "table")
 end

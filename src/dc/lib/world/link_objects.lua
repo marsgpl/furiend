@@ -1,129 +1,99 @@
 local json = require "json"
-local is_array = require "is_array"
 local error_kv = require "error_kv"
-local check_object_id = require "lib.world.check_object_id"
+local is_array = require "is_array"
+local check_id = require "lib.world.check_id"
+local check_key_name = require "lib.world.check_key_name"
+
+local linkers
 
 local function link_key(key, obj, class, objects)
-    local key_type = class[key]
-    local value = obj[key]
+    check_key_name(key)
 
-    if not value then
-        error_kv("empty value", {
-            object = obj.id,
-            key = key,
-        })
-    end
+    local schema = class[key] -- already parsed by link_classes
+    assert(schema, "key not found in class definition")
 
-    if not key_type then
-        error_kv("object.key not defined in class", {
-            object = obj.id,
-            key = key,
-            class = class.id,
-        })
-    elseif type(key_type) == "table" then -- rel
-        local rel_obj_id = value
-        local rel_obj = objects[rel_obj_id]
+    local linker = linkers[schema.type]
+    assert(linker, "linker not found for the key type")
 
-        if not rel_obj then
-            error_kv("object rel not found", {
-                object = obj.id,
-                key = key,
-                rel = rel_obj_id,
-                rel_class = key_type.id,
-            })
-        elseif rel_obj.class ~= key_type.id then
-            error_kv("object rel class mismatch", {
-                object = obj.id,
-                key = key,
-                rel = rel_obj_id,
-                rel_class = rel_obj.class,
-                expected_rel_class = key_type.id,
-            })
-        end
-
-        obj[key] = rel_obj
-    elseif key_type == "integer" then
-        local integer, err = math.tointeger(value)
-        obj[key] = integer
-
-        if err then
-            error_kv("object.key: invalid integer", {
-                object = obj.id,
-                key = key,
-                value = value,
-            })
-        end
-    elseif key_type == "float" then
-        local float, err = tonumber(value, 10)
-        obj[key] = float
-
-        if err then
-            error_kv("object.key: invalid float", {
-                object = obj.id,
-                key = key,
-                value = value,
-            })
-        end
-    elseif key_type == "string" then
-        -- already string
-    elseif key_type == "object" then
-        obj[key] = json.parse(value)
-
-        if type(obj[key]) ~= "table" then
-            error_kv("object.key: invalid object", {
-                object = obj.id,
-                key = key,
-                value = value,
-            })
-        end
-    elseif key_type == "array" then
-        obj[key] = json.parse(obj[key])
-
-        if not is_array(obj[key]) then
-            error_kv("object.key: invalid array", {
-                object = obj.id,
-                key = key,
-                value = value,
-            })
-        end
-    elseif key_type == "boolean" then
-        obj[key] = value == "true"
-
-        if value ~= "true" and value ~= "false" then
-            error_kv("object.key: invalid boolean", {
-                object = obj.id,
-                key = key,
-                value = value,
-            })
-        end
-    else
-        error_kv("object.key: unsupported type", {
-            object = obj.id,
-            class = obj.class,
-            key = key,
-            type = key_type,
-        })
-    end
+    obj[key] = linker(obj[key], schema, objects)
 end
+
+linkers = {
+    bool = function(value)
+        if value == "true" then
+            return true
+        elseif value == "false" then
+            return false
+        else
+            error("invalid bool")
+        end
+    end,
+    int = function(value)
+        return assert(math.tointeger(value), "invalid int")
+    end,
+    float = function(value)
+        return assert(tonumber(value), "invalid float")
+    end,
+    str = function(value)
+        return value -- already string
+    end,
+    table = function(value)
+        value = json.parse(value)
+        assert(type(value) == "table", "invalid table")
+        return value
+    end,
+    rel = function(rel_object_id, schema, objects)
+        local rel_object = objects[rel_object_id]
+        assert(rel_object, "rel object not found")
+
+        local expected_class_id = schema.class.id
+        local rel_class_id = rel_object.class.id or rel_object.class
+        assert(expected_class_id == rel_class_id, "rel class mismatch")
+
+        return rel_object
+    end,
+    rels = function(value, schema, objects)
+        local ids = json.parse(value)
+        assert(is_array(ids), "invalid array")
+
+        for i, rel_object_id in ipairs(ids) do
+            ids[i] = linkers.rel(rel_object_id, schema, objects)
+        end
+
+        return ids
+    end,
+}
 
 return function(objects, classes)
     for id, obj in pairs(objects) do
-        obj.id = id
+        local class_id = obj.class
+        local class = classes[class_id]
 
-        check_object_id(id)
-
-        local class = classes[obj.class]
+        check_id(id, "object")
+        check_id(class_id, "object")
 
         if not class then
             error_kv("object class not found", {
-                object = obj,
-                class = obj.class,
+                object_id = id,
+                class_id = class_id,
             })
         end
 
+        obj.id = id
+        obj.class = class
+
         for key in pairs(obj) do
             if key ~= "id" and key ~= "class" then
-                link_key(key, obj, class, objects)
+                local ok, err = pcall(link_key, key, obj, class, objects)
+
+                if not ok then
+                    error_kv("object key link failed: " .. err, {
+                        object_id = id,
+                        object_class_id = class_id,
+                        key = key,
+                        value = obj[key],
+                    })
+                end
             end
         end
     end
