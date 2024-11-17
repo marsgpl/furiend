@@ -143,7 +143,8 @@ int fs_readfile(lua_State *L) {
         fclose(fp);
 
         if (has_error) {
-            luaF_error_errno(L, "fread failed; path: %s", path);
+            clearerr(fp);
+            luaF_error_errno(L, "fread failed; path: %s; i/o error", path);
         } else {
             luaL_error(L, "fread failed; path: %s", path);
         }
@@ -162,7 +163,7 @@ int fs_readfile(lua_State *L) {
 }
 
 int fs_parse_path(lua_State *L) {
-    luaF_need_args(L, 1, "readfile");
+    luaF_need_args(L, 1, "parse_path");
     luaL_checktype(L, 1, LUA_TSTRING);
 
     size_t len;
