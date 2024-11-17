@@ -33,6 +33,11 @@ local function rels(value, objects)
     end
 end
 
+local function class(value, _, classes)
+    assert(type(value) == "table", "class: invalid table")
+    assert(value == classes[value.id], "class: not found")
+end
+
 return {
     bool = bool,
     int = int,
@@ -41,4 +46,5 @@ return {
     table = table,
     rel = rel,
     rels = rels,
+    class = class,
 }

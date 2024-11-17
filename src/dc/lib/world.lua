@@ -115,7 +115,7 @@ function proto:validate_object_key(obj, key)
     local schema = obj.class[key]
     assert(schema, "key not found in class definition")
 
-    check_obj_key[schema.type](obj[key], self.objects)
+    check_obj_key[schema.type](obj[key], self.objects, self.classes)
 end
 
 -- expire_s: nil or 0 = do not expire

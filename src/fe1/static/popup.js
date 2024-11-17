@@ -175,8 +175,12 @@ function panelRowObjectHTML(key, ent) {
         const type = entClass?.[key]?.type
         const isRel = type === 'rel'
         const isMultiRel = type === 'rels'
+        const isClass = type === 'class'
 
-        if (isRel) {
+        if (isClass) {
+            isText = false
+            value = valueLink('class', ent[key])
+        } else if (isRel) {
             isText = false
             value = valueLink('object', ent[key])
         } else if (isMultiRel) {

@@ -6,4 +6,5 @@ return {
     "table",
     "rel",
     "rels",
+    "class",
 }

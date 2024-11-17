@@ -123,7 +123,7 @@ function checkClassKey(ent, key) {
 
     if (type === 'rel' || type === 'rels') {
         const relClass = ctx.ents.class[schema.class]
-        assert(relClass, `rel class not found`)
+        assert(relClass, `rel class not found: ${schema.class}`)
     }
 }
 
@@ -166,6 +166,10 @@ checkObjectKey.linkers = {
         rels = JSON.parse(rels)
         assert(Array.isArray(rels), 'not an array')
         rels.forEach(rel => checkObjectKey.linkers.rel(rel, schema))
+    },
+    class: (relId) => {
+        const rel = ctx.ents.class[relId]
+        assert(rel, `rel class not found: ${relId}`)
     },
 }
 

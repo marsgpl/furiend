@@ -2,6 +2,7 @@
 
 ## todo
 
+- on object save: save parent objects (key "-")
 - logic event queue (when emitting events from logic itself)
 - compare classes. if lots of fields are similar, suggest creating parent class
 - transform event to class: single match, multiple matches, none matched
