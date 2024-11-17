@@ -6,10 +6,19 @@ local check_key_name = require "lib.world.check_key_name"
 
 local linkers
 
-local function link_key(key, obj, class, objects)
+local function link_key(obj, key, objects)
+    if key == "id" then
+        return check_id(obj.id)
+    end
+
+    if key == "class" then
+        assert(obj.class, "object class not found")
+        return check_id(obj.class.id)
+    end
+
     check_key_name(key)
 
-    local schema = class[key] -- already parsed by link_classes
+    local schema = obj.class[key]
     assert(schema, "key not found in class definition")
 
     local linker = linkers[schema.type]
@@ -69,31 +78,19 @@ return function(objects, classes)
         local class_id = obj.class
         local class = classes[class_id]
 
-        check_id(id, "object")
-        check_id(class_id, "object")
-
-        if not class then
-            error_kv("object class not found", {
-                object_id = id,
-                class_id = class_id,
-            })
-        end
-
         obj.id = id
         obj.class = class
 
         for key in pairs(obj) do
-            if key ~= "id" and key ~= "class" then
-                local ok, err = pcall(link_key, key, obj, class, objects)
+            local ok, err = pcall(link_key, obj, key, objects)
 
-                if not ok then
-                    error_kv("object key link failed: " .. err, {
-                        object_id = id,
-                        object_class_id = class_id,
-                        key = key,
-                        value = obj[key],
-                    })
-                end
+            if not ok then
+                error_kv("object key link failed: " .. err, {
+                    object_id = id,
+                    object_class_id = class_id,
+                    key = key,
+                    value = obj[key],
+                })
             end
         end
     end

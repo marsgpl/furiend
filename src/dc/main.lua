@@ -9,12 +9,12 @@ local redis = require "redis"
 local log = require "log"
 local time = require "time"
 local json = require "json"
-local error_kv = require "error_kv"
 local logic = require "lib.logic"
 local world = require "lib.world"
-local is_event = require "lib.is_event"
 
 local config = require "config"
+
+math.randomseed()
 
 loop(function()
     log("started")
@@ -40,19 +40,10 @@ loop(function()
 
     wait(rc:subscribe(config.id, function(push)
         local event = json.parse(push)
-
-        if not is_event(event) then
-            logic(dc, {
-                type = "bad_push",
-                from = config.id,
-                time = time(),
-                payload = { push = push },
-            })
-        else
-            event.time = time()
-            logic(dc, event)
-        end
+        event.time = time()
+        logic(dc, event)
     end))
+
     log("redis subscribed", config.id)
 
     logic(dc, {

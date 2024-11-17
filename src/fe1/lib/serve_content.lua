@@ -2,7 +2,6 @@ local fs = require "fs"
 local redis = require "redis"
 local async = require "async"
 local wait = async.wait
-local error_kv = require "error_kv"
 local json_response = require "lib.json_response"
 local load_entities = require "world.load_entities"
 local types = require "world.types"

@@ -7,7 +7,11 @@ local types = require "lib.world.types"
 
 local types_set = to_set(types)
 
-local function link_key(key, class, classes)
+local function link_key(class, key, classes)
+    if key == "id" then
+        return check_id(class.id)
+    end
+
     check_key_name(key)
 
     local schema = json.parse(class[key])
@@ -27,21 +31,17 @@ end
 
 return function(classes)
     for id, class in pairs(classes) do
-        check_id(id, "class")
-
         class.id = id
 
         for key in pairs(class) do
-            if key ~= "id" then
-                local ok, err = pcall(link_key, key, class, classes)
+            local ok, err = pcall(link_key, class, key, classes)
 
-                if not ok then
-                    error_kv("class key link failed: " .. err, {
-                        class_id = id,
-                        key = key,
-                        value = class[key],
-                    })
-                end
+            if not ok then
+                error_kv("class key link failed: " .. err, {
+                    class_id = id,
+                    key = key,
+                    value = class[key],
+                })
             end
         end
     end

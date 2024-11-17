@@ -102,12 +102,12 @@ esc.rep = {
 function checkId(id) {
     assert(id.match(checkId.expr), 'invalid id')
 }
-checkId.expr = /^[A-Za-z0-9_-]+$/
+checkId.expr = /^[A-Za-z0-9_=-]+$/
 
 function checkKeyName(key) {
     assert(key.match(checkKeyName.expr), 'invalid key name')
 }
-checkKeyName.expr = /^[A-Za-z0-9_-]+$/
+checkKeyName.expr = /^[A-Za-z0-9_=-]+$/
 
 function checkClassKey(ent, key) {
     let schema = ent[key]
