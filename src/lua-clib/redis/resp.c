@@ -140,20 +140,22 @@ static size_t parse_map(
 
     for (int i = 0; i < len; ++i) {
         parsed = resp_unpack(L, buf + total_parsed, buf_len - total_parsed, 0);
-        total_parsed += parsed;
 
         if (unlikely(parsed == 0)) {
             lua_pop(L, 1); // lua_createtable
             return 0;
         }
 
-        parsed = resp_unpack(L, buf + total_parsed, buf_len - total_parsed, 0);
         total_parsed += parsed;
+
+        parsed = resp_unpack(L, buf + total_parsed, buf_len - total_parsed, 0);
 
         if (unlikely(parsed == 0)) {
             lua_pop(L, 2); // map, kd
             return 0;
         }
+
+        total_parsed += parsed;
 
         lua_rawset(L, -3); // map[key] = value
     }
@@ -245,12 +247,13 @@ static size_t parse_arr(
 
     for (int i = 0; i < len; ++i) {
         parsed = resp_unpack(L, buf + total_parsed, buf_len - total_parsed, 0);
-        total_parsed += parsed;
 
         if (unlikely(parsed == 0)) {
             lua_pop(L, 1); // lua_createtable
             return 0;
         }
+
+        total_parsed += parsed;
 
         lua_rawseti(L, -2, next_idx++); // arr[i] = value
     }
@@ -321,6 +324,10 @@ size_t resp_unpack(
     size_t buf_len,
     int push_type
 ) {
+    if (unlikely(buf_len < 3)) {
+        return 0;
+    }
+
     int type = buf[0];
 
     if (push_type) {
