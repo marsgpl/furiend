@@ -353,8 +353,8 @@ size_t resp_unpack(
             return parse_double(L, buf, buf_len, push_type);
     }
 
-    return luaL_error(L, "unsupported packet: %s",
-        luaF_escape_string(L, buf, buf_len, 32));
+    return luaL_error(L, "unsupported packet: %s (#%d)",
+        luaF_escape_string(L, buf, buf_len, 32), buf_len);
 }
 
 // <type><length>\r\n

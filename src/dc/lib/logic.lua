@@ -9,13 +9,15 @@ local error_kv = require "error_kv"
 return function(dc, event)
     local world, rc = dc.world, dc.rc
 
-    log("event", event)
-
-    event.payload = event.payload or {}
-    local object = world:create_object("event", event)
-    world:save_object(object, 86400)
-
-    -- convert event to telegram event
+log("event", event)
+    local e_obj = world:create_object("event", event)
+log("event object", e_obj)
+    -- world:save_object(e_obj, 86400)
+    local e_mut = world:mutate_any(e_obj)
+log("event mutated to", e_mut)
+    if e_mut then
+        -- world:save_object(e_mut, 86400)
+    end
 
     -- primordial reflexes
 

@@ -7,6 +7,7 @@ local link_objects = require "lib.world.link_objects"
 local check_id = require "lib.world.check_id"
 local check_key_name = require "lib.world.check_key_name"
 local check_obj_key = require "lib.world.check_obj_key"
+local comparators = require "lib.world.comparators"
 local types = require "lib.world.types"
 local error_kv = require "error_kv"
 local json = require "json"
@@ -14,6 +15,7 @@ local redis = require "redis"
 local tensor = require "tensor"
 local async = require "async"
 local wait = async.wait
+local log = require "log"
 
 local proto = {}
 local mt = { __index = proto }
@@ -56,14 +58,6 @@ function proto:create_object(class_id, blueprint)
     end
 
     blueprint = blueprint or {}
-
-    if type(blueprint) ~= "table" then
-        error_kv("blueprint is not a table", {
-            class_id = class_id,
-            blueprint = blueprint,
-        })
-    end
-
     blueprint.class = class
 
     if blueprint.id then
@@ -149,6 +143,47 @@ function proto:save_object(object, expire_s)
     end
 end
 
+function proto:mutate_any(obj)
+    local mutators = self.mutators[obj.class.id]
+
+    if not mutators then
+        return
+    end
+
+    for _, mut in ipairs(mutators) do
+        local mut_obj = self:mutate(obj, mut)
+
+        if mut_obj then
+            return mut_obj
+        end
+    end
+end
+
+function proto:mutate(obj, mut)
+    for _,if_ in ipairs(mut.ifs) do
+        local from = tensor.unwrap(obj, if_.path)
+        local to = if_.values
+        local op = if_.op
+
+        if not comparators[op](from, to) then
+            return -- does not satisfy, can't mutate
+        end
+    end
+
+    local blueprint = {}
+    local schema = mut.to
+
+    for _, wrap in ipairs(mut.wraps) do
+        local from = obj[wrap.from]
+        local field = schema[wrap.to]
+
+        -- according to field type, convert "from"
+        blueprint[wrap.to] = from
+    end
+
+    return self:create_object(schema.id, blueprint)
+end
+
 return function(props)
     assert(type(props) == "table")
 
@@ -164,8 +199,10 @@ return function(props)
         promise(world.load_objects, world)
     )
 
+    world.mutators = {}
+
     link_classes(world.classes)
-    link_objects(world.objects, world.classes)
+    link_objects(world.objects, world.classes, world.mutators)
 
     return world
 end

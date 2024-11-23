@@ -3,6 +3,8 @@ local error_kv = require "error_kv"
 local is_array = require "is_array"
 local check_id = require "lib.world.check_id"
 local check_key_name = require "lib.world.check_key_name"
+local check_mutator = require "lib.world.check_mutator"
+local to_set = require "to_set"
 
 local linkers
 
@@ -78,7 +80,7 @@ linkers = {
     end,
 }
 
-return function(objects, classes)
+return function(objects, classes, mutators)
     for id, obj in pairs(objects) do
         local class_id = obj.class
         local class = classes[class_id]
@@ -97,6 +99,24 @@ return function(objects, classes)
                     value = obj[key],
                 })
             end
+        end
+
+        if class_id == "mutator" then
+            check_mutator(obj)
+
+            local from_id = obj.from.id
+            local list = mutators[from_id]
+
+            if not list then
+                list = {}
+                mutators[from_id] = list
+            end
+
+            table.insert(list, obj)
+        end
+
+        if class_id == "if" and obj.op == "in" then
+            obj.values = to_set(obj.values)
         end
     end
 end
