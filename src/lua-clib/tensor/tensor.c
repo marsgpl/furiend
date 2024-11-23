@@ -1,12 +1,39 @@
-#include "unwrap.h"
+#include "tensor.h"
 
-LUAMOD_API int luaopen_unwrap(lua_State *L) {
-    lua_pushcfunction(L, unwrap);
+LUAMOD_API int luaopen_tensor(lua_State *L) {
+    luaL_newlib(L, tensor_index);
     return 1;
 }
 
+int tensor_gen_id(lua_State *L) {
+    luaF_need_args(L, 2, "gen_id");
+    luaL_checktype(L, 1, LUA_TSTRING); // prefix
+    luaL_checktype(L, 2, LUA_TTABLE); // db
+
+    const char *prefix = lua_tostring(L, 1);
+    struct timespec ts;
+
+    while (1) {
+        if (unlikely(clock_gettime(CLOCK_REALTIME, &ts) < 0)) {
+            luaF_error_errno(L, "clock_gettime failed");
+        }
+
+        lua_pushfstring(L, "%s" GEN_ID_SEP "%d" GEN_ID_SEP "%d",
+            prefix, ts.tv_sec, ts.tv_nsec);
+        lua_pushvalue(L, 3); // prefix, db, id, id
+
+        if (lua_rawget(L, 2) != LUA_TTABLE) { // prefix, db, id, nil
+            lua_pop(L, 1); // prefix, db, id
+            return 1; // id
+        } else { // prefix, db, id, obj
+            // dup id, try again
+            lua_settop(L, 2); // prefix, db
+        }
+    }
+}
+
 // unwrap(event, "payload.event.*.chat.id")
-static int unwrap(lua_State *L) {
+int tensor_unwrap(lua_State *L) {
     luaF_need_args(L, 2, "unwrap"); // value, path
     luaL_checktype(L, 2, LUA_TSTRING);
     lua_insert(L, 1); // path, value
@@ -43,7 +70,7 @@ static int unwrap(lua_State *L) {
                     continue; // can't read from value, skip
                 }
 
-                lua_pushcfunction(L, unwrap); // k, v, fn
+                lua_pushcfunction(L, tensor_unwrap); // k, v, fn
                 lua_insert(L, lua_gettop(L) - 1); // k, fn, v
                 lua_pushlstring(L, path, path_len); // fn, v, path
                 lua_call(L, 2, 1);

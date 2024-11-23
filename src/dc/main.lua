@@ -14,8 +14,6 @@ local world = require "lib.world"
 
 local config = require "config"
 
-math.randomseed()
-
 loop(function()
     log("started")
 

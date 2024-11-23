@@ -10,8 +10,8 @@ local check_obj_key = require "lib.world.check_obj_key"
 local types = require "lib.world.types"
 local error_kv = require "error_kv"
 local json = require "json"
-local time = require "time"
 local redis = require "redis"
+local tensor = require "tensor"
 local async = require "async"
 local wait = async.wait
 
@@ -49,13 +49,17 @@ function proto:create_object(class_id, blueprint)
     local class = self.classes[class_id]
 
     if not class then
-        error_kv("class not found", { class_id = class_id })
+        error_kv("class not found", {
+            class_id = class_id,
+            blueprint = blueprint,
+        })
     end
 
     blueprint = blueprint or {}
 
     if type(blueprint) ~= "table" then
-        error_kv("provided object blueprint is not a table", {
+        error_kv("blueprint is not a table", {
+            class_id = class_id,
             blueprint = blueprint,
         })
     end
@@ -64,20 +68,13 @@ function proto:create_object(class_id, blueprint)
 
     if blueprint.id then
         if objects[blueprint.id] then
-            error_kv("object with provided id already exists", {
+            error_kv("object id already exists", {
                 id = blueprint.id,
                 blueprint = blueprint,
             })
         end
     else
-        local id
-
-        repeat id = class_id
-            .. "-" .. math.floor(time())
-            .. "-" .. math.random(100000)
-        until not objects[id]
-
-        blueprint.id = id
+        blueprint.id = tensor.gen_id(class_id, objects)
     end
 
     self:validate_object(blueprint)

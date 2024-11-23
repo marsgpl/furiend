@@ -1,4 +1,4 @@
-NAME= unwrap
+NAME= tensor
 FU_SRC= /furiend/src
 LUA_SRC= /furiend/vendor/lua-5.4.7/src
 CC= gcc

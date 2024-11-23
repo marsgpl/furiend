@@ -2,7 +2,7 @@ function actionsHTML(actions) {
     if (!actions?.length) return ''
 
     const btns = actions.map(({ text, className }) =>
-        `<button class="${esc(className) || ''}">${esc(text)}</button>`)
+        `<button class="${esc(className || '')}">${esc(text)}</button>`)
 
     return `<div class="popup-actions">
         <div class="space"></div>
@@ -28,6 +28,8 @@ function openPopup(title, body, actions) {
     $('#popup-shadow').style.display = 'block'
     $('#popup').style.display = 'flex'
 
+    ctx.popupOpened = true
+
     w.addEventListener('keydown', onEscClosePopup)
     bindActions($('#popup'), actions, closePopup)
 }
@@ -35,14 +37,16 @@ function openPopup(title, body, actions) {
 function closePopup() {
     if (ctx.isPopupBusy) return
 
+    ctx.popupOpened = false
+
     $('#popup').style.display = 'none'
     $('#popup-shadow').style.display = 'none'
 
     w.removeEventListener('keydown', onEscClosePopup)
 }
 
-function onEscClosePopup(event) {
-    if (event.key === 'Escape') {
+function onEscClosePopup(e) {
+    if (e.key === 'Escape') {
         closePopup()
     }
 }
@@ -63,10 +67,20 @@ function openPanel(title, body) {
     $('#panel .popup-title').innerText = title
     $('#panel .popup-body').innerHTML = body
     $('#panel').style.display = 'flex'
+
+    w.addEventListener('keydown', onPanelKey)
 }
 
 function closePanel() {
     $('#panel').style.display = 'none'
+
+    w.removeEventListener('keydown', onPanelKey)
+}
+
+function onPanelKey(e) {
+    if (e.key === 'd' && !ctx.popupOpened) {
+        $('#panel .del').click()
+    }
 }
 
 function togglePanel() {
@@ -101,7 +115,7 @@ function togglePanel() {
         {
             text: 'delete',
             onClick: () => confirmDelEnt(fullId),
-            className: 'clear',
+            className: 'clear del',
         },
         {
             text: '+ key',
@@ -235,12 +249,14 @@ function confirmDelEnt(fullId) {
         + '\nrels will be broken'
 
     openConfirm(title, msg, () => delEnt(fullId))
+
+    $('#popup .confirm').focus()
 }
 
 function openConfirm(title, msg, onYes, onNo) {
     openPopup(title, `<div class="popup-msg">${msg}</div>`, [
         { text: 'cancel', className: 'clear', onClick: onNo },
-        { text: 'confirm', onClick: onYes },
+        { text: 'confirm', className: 'confirm', onClick: onYes },
     ])
 }
 

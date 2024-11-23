@@ -71,11 +71,9 @@ linkers = {
 
         return ids
     end,
-    class = function(rel_class_id, schema, _, classes)
+    class = function(rel_class_id, _, _, classes)
         local rel_class = classes[rel_class_id]
         assert(rel_class, "rel class not found")
-        assert(rel_class_id == schema.class.id, "rel class mismatch")
-
         return rel_class
     end,
 }
