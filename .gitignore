@@ -1,14 +1,10 @@
 /bin/lua*
 /bin/redis*
-
 /data
 /vendor
-/include/vendor
-
 *.o
 *.so
 *.luac
-
 /provision/.env
 /src/dc/config.lua
 /src/fe1/config.lua

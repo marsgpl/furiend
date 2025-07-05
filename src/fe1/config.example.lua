@@ -11,5 +11,6 @@ return {
         ip4 = "127.0.0.1",
         ip4_docker = "0.0.0.0",
         port = 18001,
+        static = "/furiend/src/fe1/static",
     },
 }

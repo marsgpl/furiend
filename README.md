@@ -127,3 +127,5 @@ cat dump.txt
 - dns: more types
 - dns: ip6
 - get rid of yyjson?
+-  "/furiend/src/fe1/lib/serve_content.lua:112: file error: 4"
+- https://github.com/ronchaine/libexecinfo/blob/master/test.c

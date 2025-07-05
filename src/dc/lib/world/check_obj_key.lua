@@ -1,4 +1,4 @@
-local is_array = require "is_array"
+local array = require "array"
 
 local function bool(value)
     assert(type(value) == "boolean", "invalid bool")
@@ -26,7 +26,7 @@ local function rel(value, objects)
 end
 
 local function rels(value, objects)
-    assert(is_array(value), "rels: invalid array")
+    assert(array.is_array(value), "rels: invalid array")
 
     for _, rel_obj in ipairs(value) do
         rel(rel_obj, objects)

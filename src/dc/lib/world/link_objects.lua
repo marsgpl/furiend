@@ -1,10 +1,9 @@
 local json = require "json"
 local error_kv = require "error_kv"
-local is_array = require "is_array"
+local array = require "array"
+local to_set = require "to_set"
 local check_id = require "lib.world.check_id"
 local check_key_name = require "lib.world.check_key_name"
-local check_mutator = require "lib.world.check_mutator"
-local to_set = require "to_set"
 
 local linkers
 
@@ -65,7 +64,7 @@ linkers = {
     end,
     rels = function(value, schema, objects)
         local ids = json.parse(value)
-        assert(is_array(ids), "invalid array")
+        assert(array.is_array(ids), "invalid array")
 
         for i, rel_object_id in ipairs(ids) do
             ids[i] = linkers.rel(rel_object_id, schema, objects)
@@ -80,7 +79,7 @@ linkers = {
     end,
 }
 
-return function(objects, classes, mutators)
+return function(objects, classes)
     for id, obj in pairs(objects) do
         local class_id = obj.class
         local class = classes[class_id]
@@ -99,20 +98,6 @@ return function(objects, classes, mutators)
                     value = obj[key],
                 })
             end
-        end
-
-        if class_id == "mutator" then
-            check_mutator(obj)
-
-            local from_id = obj.from.id
-            local list = mutators[from_id]
-
-            if not list then
-                list = {}
-                mutators[from_id] = list
-            end
-
-            table.insert(list, obj)
         end
 
         if class_id == "if" and obj.op == "in" then

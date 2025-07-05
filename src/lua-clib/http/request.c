@@ -95,7 +95,7 @@ static int request_start(lua_State *L) {
     int status = connect(fd, (struct sockaddr *)&sa, sizeof(sa));
 
     if (unlikely(status != -1)) {
-        luaF_error_errno(L, "connected immediately; addr: %s:%d", ip4, port);
+        luaL_error(L, "connected immediately; addr: %s:%d", ip4, port);
     } else if (errno != EINPROGRESS) {
         luaF_error_errno(L, "connect failed; addr: %s:%d", ip4, port);
     }

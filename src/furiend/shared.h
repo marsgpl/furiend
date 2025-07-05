@@ -37,8 +37,14 @@ static_assert(sizeof(char) == 1, "sizeof(char) is not 1");
 #define F_ESC_STR_SUFFIX " ... (%lu more)"
 
 #define inline __inline__
-#define likely(expr) __builtin_expect(expr, 1)
-#define unlikely(expr) __builtin_expect(expr, 0)
+
+#ifndef likely
+#define likely(expr) __builtin_expect((expr) != 0, 1)
+#endif
+
+#ifndef unlikely
+#define unlikely(expr) __builtin_expect((expr) != 0, 0)
+#endif
 
 typedef struct {
     int fd;

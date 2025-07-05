@@ -4,10 +4,12 @@ local key_prefix = require "lib.world.key_prefix"
 local load_entities = require "lib.world.load_entities"
 local link_classes = require "lib.world.link_classes"
 local link_objects = require "lib.world.link_objects"
+local link_mutators = require "lib.world.link_mutators"
 local check_id = require "lib.world.check_id"
 local check_key_name = require "lib.world.check_key_name"
 local check_obj_key = require "lib.world.check_obj_key"
-local comparators = require "lib.world.comparators"
+local ops = require "lib.world.ops"
+local warps = require "lib.world.warps"
 local types = require "lib.world.types"
 local error_kv = require "error_kv"
 local json = require "json"
@@ -15,7 +17,6 @@ local redis = require "redis"
 local tensor = require "tensor"
 local async = require "async"
 local wait = async.wait
-local log = require "log"
 
 local proto = {}
 local mt = { __index = proto }
@@ -23,18 +24,24 @@ local mt = { __index = proto }
 function proto:stat()
     local classes_n = 0
     local objects_n = 0
+    local mutators_n = 0
 
     for _ in pairs(self.classes) do
         classes_n = classes_n + 1
     end
 
-    for _ in pairs(self.objects) do
-        objects_n = objects_n + 1
+    for obj in pairs(self.objects) do
+        if obj.class.id == "mut" then
+            mutators_n = mutators_n + 1
+        else
+            objects_n = objects_n + 1
+        end
     end
 
     return {
         classes_n = classes_n,
         objects_n = objects_n,
+        mutators_n = mutators_n,
     }
 end
 
@@ -51,7 +58,7 @@ function proto:create_object(class_id, blueprint)
     local class = self.classes[class_id]
 
     if not class then
-        error_kv("class not found", {
+        error_kv("class not found by id", {
             class_id = class_id,
             blueprint = blueprint,
         })
@@ -79,8 +86,10 @@ function proto:create_object(class_id, blueprint)
 end
 
 function proto:validate_object(obj)
+    local validator = self.validate_object_key
+
     for key in pairs(obj) do
-        local ok, err = pcall(self.validate_object_key, self, obj, key)
+        local ok, err = pcall(validator, self, obj, key)
 
         if not ok then
             error_kv("invalid object key: " .. err, {
@@ -160,28 +169,27 @@ function proto:mutate_any(obj)
 end
 
 function proto:mutate(obj, mut)
-    for _,if_ in ipairs(mut.ifs) do
-        local from = tensor.unwrap(obj, if_.path)
-        local to = if_.values
-        local op = if_.op
+    for _, ifx in ipairs(mut.ifs) do
+        local from = tensor.unwrap(obj, ifx.path)
+        local to = ifx.values
 
-        if not comparators[op](from, to) then
-            return -- does not satisfy, can't mutate
+        if not ops[ifx.op](from, to) then
+            return
         end
     end
 
+    local class = mut.to
     local blueprint = {}
-    local schema = mut.to
 
-    for _, wrap in ipairs(mut.wraps) do
-        local from = obj[wrap.from]
-        local field = schema[wrap.to]
+    for _, warp in ipairs(mut.warps) do
+        local value = tensor.unwrap(obj, warp.from)
+        local to = warp.to
+        local schema = class[to]
 
-        -- according to field type, convert "from"
-        blueprint[wrap.to] = from
+        blueprint[to] = warps[schema.type](value, mut, warp, self)
     end
 
-    return self:create_object(schema.id, blueprint)
+    return self:create_object(class.id, blueprint)
 end
 
 return function(props)
@@ -189,9 +197,12 @@ return function(props)
 
     local world = setmetatable(props, mt)
 
-    for _, type_name in ipairs(types) do
-        assert(check_obj_key[type_name],
-            "check_obj_key validator missing for type: " .. type_name)
+    for _, field_type in ipairs(types) do
+        assert(check_obj_key[field_type],
+            "obj key validator missing for type: " .. field_type)
+
+        assert(warps[field_type],
+            "warp missing for type: " .. field_type)
     end
 
     waitall(
@@ -199,10 +210,9 @@ return function(props)
         promise(world.load_objects, world)
     )
 
-    world.mutators = {}
-
     link_classes(world.classes)
-    link_objects(world.objects, world.classes, world.mutators)
+    link_objects(world.objects, world.classes)
+    world.mutators = link_mutators(world.objects)
 
     return world
 end
